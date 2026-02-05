@@ -12,75 +12,68 @@ from states.registration import ProfileEditStates
 from repositories.user_repository import UserRepository
 from repositories.database import get_session
 from utils.errors import handle_error
-from utils.validators import validate_name, validate_photo
+from utils.validators import (
+    validate_name, 
+    validate_photo,
+    validate_short_description,
+    validate_full_description,
+    validate_qualities
+)
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 
+@router.message(F.text == "👤 Профиль")
 @router.callback_query(F.data == "profile")
-async def show_profile(callback: CallbackQuery) -> None:
+async def show_profile(event) -> None:
     """Показать профиль пользователя"""
     try:
-        await callback.answer()
+        # Определяем тип события
+        if isinstance(event, CallbackQuery):
+            await event.answer()
+            message = event.message
+            user_id = event.from_user.id
+        else:
+            message = event
+            user_id = event.from_user.id
         
         async for session in get_session():
-            user = await UserRepository.get_by_telegram_id(
-                session,
-                callback.from_user.id
-            )
+            user = await UserRepository.get_by_telegram_id(session, user_id)
             
             if not user or not user.is_registered:
-                try:
-                    await callback.message.edit_text("❌ Ты ещё не зарегистрирован. Используй /start")
-                except Exception:
-                    await callback.message.answer("❌ Ты ещё не зарегистрирован. Используй /start")
-                return
-            
-            # Проверяем, не находимся ли мы уже в профиле
-            # Проверяем по тексту или caption
-            current_text = callback.message.text or (callback.message.caption or "")
-            if "👤 <b>Профиль</b>" in current_text:
-                await callback.answer("👤 Вы уже в профиле", show_alert=False)
+                await message.answer("❌ Ты ещё не зарегистрирован. Используй /start")
                 return
             
             # Формирование текста профиля
             profile_text = f"👤 <b>Профиль</b>\n\n"
-            profile_text += f"Имя: {user.name or 'Не указано'}\n"
-            profile_text += f"Возраст: {user.age or 'Не указан'}\n"
+            profile_text += f"<b>Имя:</b> {user.name or 'Не указано'}\n"
+            profile_text += f"<b>Возраст:</b> {user.age or 'Не указан'}\n\n"
+            
+            if user.short_description:
+                profile_text += f"<b>О себе:</b> {user.short_description}\n\n"
+            
+            if user.qualities:
+                qualities_list = user.qualities.split(',')
+                profile_text += f"<b>Главные качества:</b>\n"
+                for quality in qualities_list:
+                    profile_text += f"• {quality.strip()}\n"
+                profile_text += "\n"
+            
+            if user.full_description:
+                profile_text += f"<b>Подробнее:</b>\n{user.full_description}"
             
             if user.photo_id:
-                # Если есть фото, пытаемся отредактировать caption или отправляем новое
-                try:
-                    # Пытаемся отредактировать caption если предыдущее сообщение было с фото
-                    await callback.message.bot.edit_message_caption(
-                        chat_id=callback.message.chat.id,
-                        message_id=callback.message.message_id,
-                        caption=profile_text,
-                        reply_markup=get_profile_keyboard(user.is_minor)
-                    )
-                except Exception:
-                    # Если не получилось (не было фото или другое сообщение), удаляем и отправляем новое
-                    try:
-                        await callback.message.delete()
-                    except Exception:
-                        pass
-                    await callback.message.answer_photo(
-                        photo=user.photo_id,
-                        caption=profile_text,
-                        reply_markup=get_profile_keyboard(user.is_minor)
-                    )
+                await message.answer_photo(
+                    photo=user.photo_id,
+                    caption=profile_text,
+                    reply_markup=get_profile_keyboard(user.is_minor)
+                )
             else:
-                try:
-                    await callback.message.edit_text(
-                        profile_text,
-                        reply_markup=get_profile_keyboard(user.is_minor)
-                    )
-                except Exception:
-                    await callback.message.answer(
-                        profile_text,
-                        reply_markup=get_profile_keyboard(user.is_minor)
-                    )
+                await message.answer(
+                    profile_text,
+                    reply_markup=get_profile_keyboard(user.is_minor)
+                )
             break
             
     except Exception as e:
@@ -92,36 +85,22 @@ async def show_profile(callback: CallbackQuery) -> None:
 async def edit_profile(callback: CallbackQuery, state: FSMContext) -> None:
     """Редактирование профиля"""
     await callback.answer()
-    is_minor = False
-    async for session in get_session():
-        user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
-        if user:
-            is_minor = user.is_minor
-        break
+    from keyboards.profile import get_edit_profile_keyboard
     try:
         await callback.message.edit_text(
             "✏️ <b>Редактирование профиля</b>\n\n"
-            "Что ты хочешь изменить?\n\n"
-            "• Имя\n"
-            "• Фото\n"
-            "• Сильные стороны\n"
-            "• Описание",
-            reply_markup=get_profile_keyboard(is_minor=is_minor)
+            "Что ты хочешь изменить?",
+            reply_markup=get_edit_profile_keyboard()
         )
     except Exception:
-        # Если предыдущее было с фото, удаляем и отправляем новое
         try:
             await callback.message.delete()
         except Exception:
             pass
         await callback.message.answer(
             "✏️ <b>Редактирование профиля</b>\n\n"
-            "Что ты хочешь изменить?\n\n"
-            "• Имя\n"
-            "• Фото\n"
-            "• Сильные стороны\n"
-            "• Описание",
-            reply_markup=get_profile_keyboard(is_minor=is_minor)
+            "Что ты хочешь изменить?",
+            reply_markup=get_edit_profile_keyboard()
         )
 
 
@@ -246,14 +225,14 @@ async def show_favorites(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "matches")
 async def show_matches(callback: CallbackQuery) -> None:
-    """Мэтчи"""
+    """Совпадения"""
     await callback.answer()
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
         if user:
             try:
                 await callback.message.edit_text(
-                    "💕 <b>Мэтчи</b>\n\nФункция в разработке.",
+                    "🤝 <b>Совпадения</b>\n\nФункция в разработке.",
                     reply_markup=get_profile_keyboard(is_minor=user.is_minor)
                 )
             except Exception:
@@ -262,9 +241,314 @@ async def show_matches(callback: CallbackQuery) -> None:
                 except Exception:
                     pass
                 await callback.message.answer(
-                    "💕 <b>Мэтчи</b>\n\nФункция в разработке.",
+                    "🤝 <b>Совпадения</b>\n\nФункция в разработке.",
                     reply_markup=get_profile_keyboard(is_minor=user.is_minor)
                 )
+        break
+
+
+# Обработчики редактирования полей профиля
+
+@router.callback_query(F.data == "edit_name")
+async def start_edit_name(callback: CallbackQuery, state: FSMContext) -> None:
+    """Начало редактирования имени"""
+    await callback.answer()
+    from keyboards.common import get_cancel_button
+    try:
+        await callback.message.edit_text(
+            "✏️ <b>Изменение имени</b>\n\n"
+            "Введи новое имя:",
+            reply_markup=get_cancel_button()
+        )
+    except Exception:
+        await callback.message.answer(
+            "✏️ <b>Изменение имени</b>\n\n"
+            "Введи новое имя:",
+            reply_markup=get_cancel_button()
+        )
+    await state.set_state(ProfileEditStates.editing_name)
+    await state.update_data(last_bot_message_id=callback.message.message_id)
+
+
+@router.message(ProfileEditStates.editing_name)
+async def process_edit_name(message: Message, state: FSMContext) -> None:
+    """Обработка нового имени"""
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
+    data = await state.get_data()
+    last_msg_id = data.get("last_bot_message_id")
+    
+    if not validate_name(message.text):
+        if last_msg_id:
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=last_msg_id,
+                    text="❌ Имя: от 2 до 50 символов, только буквы.\n\n✏️ <b>Изменение имени</b>\n\nВведи новое имя:",
+                    reply_markup=None
+                )
+            except Exception:
+                pass
+        return
+    
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
+        if user:
+            await UserRepository.update(session, user, name=message.text)
+            if last_msg_id:
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text="✅ Имя обновлено!",
+                        reply_markup=get_profile_keyboard(user.is_minor)
+                    )
+                except Exception:
+                    await message.answer("✅ Имя обновлено!", reply_markup=get_profile_keyboard(user.is_minor))
+            await state.clear()
+        break
+
+
+@router.callback_query(F.data == "edit_photo")
+async def start_edit_photo(callback: CallbackQuery, state: FSMContext) -> None:
+    """Начало редактирования фото"""
+    await callback.answer()
+    from keyboards.common import get_cancel_button
+    try:
+        await callback.message.edit_text(
+            "📸 <b>Изменение фото</b>\n\n"
+            "Отправь новое фото:",
+            reply_markup=get_cancel_button()
+        )
+    except Exception:
+        await callback.message.answer(
+            "📸 <b>Изменение фото</b>\n\n"
+            "Отправь новое фото:",
+            reply_markup=get_cancel_button()
+        )
+    await state.set_state(ProfileEditStates.editing_photo)
+    await state.update_data(last_bot_message_id=callback.message.message_id)
+
+
+@router.message(ProfileEditStates.editing_photo, F.photo)
+async def process_edit_photo(message: Message, state: FSMContext) -> None:
+    """Обработка нового фото"""
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
+    photo_id = message.photo[-1].file_id
+    data = await state.get_data()
+    last_msg_id = data.get("last_bot_message_id")
+    
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
+        if user:
+            await UserRepository.update(session, user, photo_id=photo_id)
+            if last_msg_id:
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text="✅ Фото обновлено!",
+                        reply_markup=get_profile_keyboard(user.is_minor)
+                    )
+                except Exception:
+                    await message.answer("✅ Фото обновлено!", reply_markup=get_profile_keyboard(user.is_minor))
+            await state.clear()
+        break
+
+
+@router.callback_query(F.data == "edit_short_description")
+async def start_edit_short_description(callback: CallbackQuery, state: FSMContext) -> None:
+    """Начало редактирования краткого описания"""
+    await callback.answer()
+    from keyboards.common import get_cancel_button
+    from texts.messages import SHORT_DESCRIPTION_REQUEST
+    try:
+        await callback.message.edit_text(
+            SHORT_DESCRIPTION_REQUEST,
+            reply_markup=get_cancel_button()
+        )
+    except Exception:
+        await callback.message.answer(
+            SHORT_DESCRIPTION_REQUEST,
+            reply_markup=get_cancel_button()
+        )
+    await state.set_state(ProfileEditStates.editing_short_description)
+    await state.update_data(last_bot_message_id=callback.message.message_id)
+
+
+@router.message(ProfileEditStates.editing_short_description)
+async def process_edit_short_description(message: Message, state: FSMContext) -> None:
+    """Обработка нового краткого описания"""
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
+    data = await state.get_data()
+    last_msg_id = data.get("last_bot_message_id")
+    
+    if not validate_short_description(message.text):
+        if last_msg_id:
+            try:
+                from texts.messages import SHORT_DESCRIPTION_REQUEST
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=last_msg_id,
+                    text="❌ Краткое описание: от 10 до 200 символов.\n\n" + SHORT_DESCRIPTION_REQUEST,
+                    reply_markup=None
+                )
+            except Exception:
+                pass
+        return
+    
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
+        if user:
+            await UserRepository.update(session, user, short_description=message.text)
+            if last_msg_id:
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text="✅ Краткое описание обновлено!",
+                        reply_markup=get_profile_keyboard(user.is_minor)
+                    )
+                except Exception:
+                    await message.answer("✅ Краткое описание обновлено!", reply_markup=get_profile_keyboard(user.is_minor))
+            await state.clear()
+        break
+
+
+@router.callback_query(F.data == "edit_full_description")
+async def start_edit_full_description(callback: CallbackQuery, state: FSMContext) -> None:
+    """Начало редактирования полного описания"""
+    await callback.answer()
+    from keyboards.common import get_cancel_button
+    from texts.messages import FULL_DESCRIPTION_REQUEST
+    try:
+        await callback.message.edit_text(
+            FULL_DESCRIPTION_REQUEST,
+            reply_markup=get_cancel_button()
+        )
+    except Exception:
+        await callback.message.answer(
+            FULL_DESCRIPTION_REQUEST,
+            reply_markup=get_cancel_button()
+        )
+    await state.set_state(ProfileEditStates.editing_full_description)
+    await state.update_data(last_bot_message_id=callback.message.message_id)
+
+
+@router.message(ProfileEditStates.editing_full_description)
+async def process_edit_full_description(message: Message, state: FSMContext) -> None:
+    """Обработка нового полного описания"""
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
+    data = await state.get_data()
+    last_msg_id = data.get("last_bot_message_id")
+    
+    if not validate_full_description(message.text):
+        if last_msg_id:
+            try:
+                from texts.messages import FULL_DESCRIPTION_REQUEST
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=last_msg_id,
+                    text="❌ Полное описание: от 20 до 1000 символов.\n\n" + FULL_DESCRIPTION_REQUEST,
+                    reply_markup=None
+                )
+            except Exception:
+                pass
+        return
+    
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
+        if user:
+            await UserRepository.update(session, user, full_description=message.text)
+            if last_msg_id:
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text="✅ Полное описание обновлено!",
+                        reply_markup=get_profile_keyboard(user.is_minor)
+                    )
+                except Exception:
+                    await message.answer("✅ Полное описание обновлено!", reply_markup=get_profile_keyboard(user.is_minor))
+            await state.clear()
+        break
+
+
+@router.callback_query(F.data == "edit_qualities")
+async def start_edit_qualities(callback: CallbackQuery, state: FSMContext) -> None:
+    """Начало редактирования качеств"""
+    await callback.answer()
+    from keyboards.common import get_cancel_button
+    from texts.messages import QUALITIES_REQUEST
+    try:
+        await callback.message.edit_text(
+            QUALITIES_REQUEST,
+            reply_markup=get_cancel_button()
+        )
+    except Exception:
+        await callback.message.answer(
+            QUALITIES_REQUEST,
+            reply_markup=get_cancel_button()
+        )
+    await state.set_state(ProfileEditStates.editing_qualities)
+    await state.update_data(last_bot_message_id=callback.message.message_id)
+
+
+@router.message(ProfileEditStates.editing_qualities)
+async def process_edit_qualities(message: Message, state: FSMContext) -> None:
+    """Обработка новых качеств"""
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
+    data = await state.get_data()
+    last_msg_id = data.get("last_bot_message_id")
+    
+    if not validate_qualities(message.text):
+        if last_msg_id:
+            try:
+                from texts.messages import QUALITIES_REQUEST
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=last_msg_id,
+                    text="❌ Укажи ровно 3 качества через запятую.\n\n" + QUALITIES_REQUEST,
+                    reply_markup=None
+                )
+            except Exception:
+                pass
+        return
+    
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
+        if user:
+            await UserRepository.update(session, user, qualities=message.text)
+            if last_msg_id:
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text="✅ Качества обновлены!",
+                        reply_markup=get_profile_keyboard(user.is_minor)
+                    )
+                except Exception:
+                    await message.answer("✅ Качества обновлены!", reply_markup=get_profile_keyboard(user.is_minor))
+            await state.clear()
         break
 
 

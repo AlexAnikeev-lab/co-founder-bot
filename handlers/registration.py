@@ -15,6 +15,9 @@ from texts.messages import (
     NAME_REQUEST,
     NAME_REQUEST_PROFILE,
     PHOTO_REQUEST,
+    SHORT_DESCRIPTION_REQUEST,
+    FULL_DESCRIPTION_REQUEST,
+    QUALITIES_REQUEST,
     LEARNING_MODE_MESSAGE,
     SUCCESS_REGISTRATION
 )
@@ -28,7 +31,14 @@ from keyboards.menu import get_main_menu_keyboard
 from repositories.user_repository import UserRepository
 from repositories.database import get_session
 from config import Config
-from utils.validators import validate_age, validate_name, validate_photo
+from utils.validators import (
+    validate_age, 
+    validate_name, 
+    validate_photo,
+    validate_short_description,
+    validate_full_description,
+    validate_qualities
+)
 from utils.errors import handle_error
 
 logger = logging.getLogger(__name__)
@@ -353,28 +363,25 @@ async def process_photo(message: Message, state: FSMContext) -> None:
                     pass
             return
 
-        async for session in get_session():
-            user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
-            if user:
-                await UserRepository.update(
-                    session,
-                    user,
-                    name=data.get("name"),
-                    photo_id=photo_id,
-                    is_registered=True
+        await state.update_data(photo_id=photo_id)
+        
+        # Переходим к запросу краткого описания
+        if last_msg_id:
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=last_msg_id,
+                    text=SHORT_DESCRIPTION_REQUEST,
+                    reply_markup=get_cancel_button()
                 )
-                if last_msg_id:
-                    try:
-                        await message.bot.edit_message_text(
-                            chat_id=message.chat.id,
-                            message_id=last_msg_id,
-                            text=SUCCESS_REGISTRATION,
-                            reply_markup=get_main_menu_keyboard(is_minor=False)
-                        )
-                    except Exception:
-                        await message.answer(SUCCESS_REGISTRATION, reply_markup=get_main_menu_keyboard(is_minor=False))
-                await state.clear()
-            break
+            except Exception:
+                sent = await message.answer(SHORT_DESCRIPTION_REQUEST, reply_markup=get_cancel_button())
+                await state.update_data(last_bot_message_id=sent.message_id)
+        else:
+            sent = await message.answer(SHORT_DESCRIPTION_REQUEST, reply_markup=get_cancel_button())
+            await state.update_data(last_bot_message_id=sent.message_id)
+        
+        await state.set_state(RegistrationStates.waiting_for_short_description)
 
     except Exception as e:
         logger.error(f"Ошибка в process_photo: {e}", exc_info=True)
@@ -410,6 +417,173 @@ async def process_photo_invalid(message: Message, state: FSMContext) -> None:
             )
         except Exception:
             pass
+
+
+@router.message(RegistrationStates.waiting_for_short_description)
+async def process_short_description(message: Message, state: FSMContext) -> None:
+    """Обработка краткого описания"""
+    try:
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        data = await state.get_data()
+        last_msg_id = data.get("last_bot_message_id")
+        
+        if not validate_short_description(message.text):
+            if last_msg_id:
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text="❌ Краткое описание: от 10 до 200 символов.\n\n" + SHORT_DESCRIPTION_REQUEST,
+                        reply_markup=get_cancel_button()
+                    )
+                except Exception:
+                    pass
+            return
+
+        await state.update_data(short_description=message.text)
+        
+        # Переходим к запросу полного описания
+        if last_msg_id:
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=last_msg_id,
+                    text=FULL_DESCRIPTION_REQUEST,
+                    reply_markup=get_cancel_button()
+                )
+            except Exception:
+                sent = await message.answer(FULL_DESCRIPTION_REQUEST, reply_markup=get_cancel_button())
+                await state.update_data(last_bot_message_id=sent.message_id)
+        else:
+            sent = await message.answer(FULL_DESCRIPTION_REQUEST, reply_markup=get_cancel_button())
+            await state.update_data(last_bot_message_id=sent.message_id)
+        
+        await state.set_state(RegistrationStates.waiting_for_full_description)
+
+    except Exception as e:
+        logger.error(f"Ошибка в process_short_description: {e}", exc_info=True)
+        await handle_error(None, e, "process_short_description")
+
+
+@router.message(RegistrationStates.waiting_for_full_description)
+async def process_full_description(message: Message, state: FSMContext) -> None:
+    """Обработка полного описания"""
+    try:
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        data = await state.get_data()
+        last_msg_id = data.get("last_bot_message_id")
+        
+        if not validate_full_description(message.text):
+            if last_msg_id:
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text="❌ Полное описание: от 20 до 1000 символов.\n\n" + FULL_DESCRIPTION_REQUEST,
+                        reply_markup=get_cancel_button()
+                    )
+                except Exception:
+                    pass
+            return
+
+        await state.update_data(full_description=message.text)
+        
+        # Переходим к запросу качеств
+        if last_msg_id:
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=last_msg_id,
+                    text=QUALITIES_REQUEST,
+                    reply_markup=get_cancel_button()
+                )
+            except Exception:
+                sent = await message.answer(QUALITIES_REQUEST, reply_markup=get_cancel_button())
+                await state.update_data(last_bot_message_id=sent.message_id)
+        else:
+            sent = await message.answer(QUALITIES_REQUEST, reply_markup=get_cancel_button())
+            await state.update_data(last_bot_message_id=sent.message_id)
+        
+        await state.set_state(RegistrationStates.waiting_for_qualities)
+
+    except Exception as e:
+        logger.error(f"Ошибка в process_full_description: {e}", exc_info=True)
+        await handle_error(None, e, "process_full_description")
+
+
+@router.message(RegistrationStates.waiting_for_qualities)
+async def process_qualities(message: Message, state: FSMContext) -> None:
+    """Обработка качеств"""
+    try:
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        data = await state.get_data()
+        last_msg_id = data.get("last_bot_message_id")
+        
+        if not validate_qualities(message.text):
+            if last_msg_id:
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text="❌ Укажи ровно 3 качества через запятую.\n\n" + QUALITIES_REQUEST,
+                        reply_markup=get_cancel_button()
+                    )
+                except Exception:
+                    pass
+            return
+
+        # Сохраняем все данные в БД
+        async for session in get_session():
+            user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
+            if user:
+                await UserRepository.update(
+                    session,
+                    user,
+                    name=data.get("name"),
+                    photo_id=data.get("photo_id"),
+                    short_description=data.get("short_description"),
+                    full_description=data.get("full_description"),
+                    qualities=message.text,
+                    is_registered=True
+                )
+                if last_msg_id:
+                    try:
+                        await message.bot.edit_message_text(
+                            chat_id=message.chat.id,
+                            message_id=last_msg_id,
+                            text=SUCCESS_REGISTRATION,
+                            reply_markup=get_main_menu_keyboard(is_minor=False)
+                        )
+                    except Exception:
+                        await message.answer(SUCCESS_REGISTRATION, reply_markup=get_main_menu_keyboard(is_minor=False))
+                await state.clear()
+            break
+
+    except Exception as e:
+        logger.error(f"Ошибка в process_qualities: {e}", exc_info=True)
+        await handle_error(None, e, "process_qualities")
+        if last_msg_id := (await state.get_data()).get("last_bot_message_id"):
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=last_msg_id,
+                    text="❌ Произошла ошибка. Попробуй ещё раз.\n\n" + QUALITIES_REQUEST,
+                    reply_markup=get_cancel_button()
+                )
+            except Exception:
+                pass
 
 
 @router.callback_query(F.data == "cancel")

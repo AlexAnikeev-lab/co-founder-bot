@@ -4,7 +4,7 @@
 
 import logging
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -28,34 +28,23 @@ def get_learning_menu_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+@router.message(F.text == "📚 Обучение")
 @router.callback_query(F.data == "learning")
-async def show_learning_menu(callback: CallbackQuery) -> None:
+async def show_learning_menu(event) -> None:
     """Показать меню обучения"""
     try:
-        await callback.answer()
+        # Определяем тип события
+        if isinstance(event, CallbackQuery):
+            await event.answer()
+            message = event.message
+        else:
+            message = event
         
-        # Проверяем, не находимся ли мы уже в разделе обучения
-        current_text = callback.message.text or (callback.message.caption or "")
-        if "📚 <b>Обучение</b>" in current_text:
-            await callback.answer("📚 Вы уже в разделе Обучение", show_alert=False)
-            return
-        
-        try:
-            await callback.message.edit_text(
-                "📚 <b>Обучение</b>\n\n"
-                "Выбери модуль:",
-                reply_markup=get_learning_menu_keyboard()
-            )
-        except Exception:
-            try:
-                await callback.message.delete()
-            except Exception:
-                pass
-            await callback.message.answer(
-                "📚 <b>Обучение</b>\n\n"
-                "Выбери модуль:",
-                reply_markup=get_learning_menu_keyboard()
-            )
+        await message.answer(
+            "📚 <b>Обучение</b>\n\n"
+            "Выбери модуль:",
+            reply_markup=get_learning_menu_keyboard()
+        )
     except Exception as e:
         logger.error(f"Ошибка в show_learning_menu: {e}", exc_info=True)
         await handle_error(None, e, "show_learning_menu")

@@ -21,6 +21,9 @@ class User(Base):
     name: Mapped[Optional[str]]
     age: Mapped[Optional[int]]
     photo_id: Mapped[Optional[str]]
+    short_description: Mapped[Optional[str]]  # Краткое описание
+    full_description: Mapped[Optional[str]]  # Полное описание
+    qualities: Mapped[Optional[str]]  # 3 главных качества (через запятую)
     is_minor: Mapped[bool] = mapped_column(default=False)  # < 14 лет
     is_registered: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
