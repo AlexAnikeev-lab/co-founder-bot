@@ -7,7 +7,6 @@ from aiogram.fsm.state import State, StatesGroup
 
 class TestStates(StatesGroup):
     """Состояния прохождения теста"""
-    viewing_test_info = State()
-    answering_question = State()
-    viewing_explanation = State()
-    viewing_results = State()
+    selecting_test = State()  # Выбор теста
+    answering_question = State()  # Ответ на вопрос
+    answering_scale = State()  # Ответ на вопрос со шкалой 1-5

@@ -4,7 +4,7 @@
 
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from repositories.database import Base
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
@@ -69,3 +69,17 @@ class UserRepository:
         """Удаление пользователя"""
         await session.delete(user)
         await session.commit()
+
+    @staticmethod
+    async def get_total_count(session: AsyncSession) -> int:
+        """Общее количество пользователей в базе"""
+        result = await session.execute(select(func.count(User.id)))
+        return result.scalar() or 0
+
+    @staticmethod
+    async def get_registered_count(session: AsyncSession) -> int:
+        """Количество пользователей с завершённой регистрацией"""
+        result = await session.execute(
+            select(func.count(User.id)).where(User.is_registered == True)
+        )
+        return result.scalar() or 0

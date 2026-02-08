@@ -71,3 +71,11 @@ def validate_qualities(text: str) -> bool:
         if len(quality) < 2 or len(quality) > 50:
             return False
     return True
+
+
+def validate_single_quality(text: str) -> bool:
+    """Валидация одного качества (2–50 символов)"""
+    if not text or not text.strip():
+        return False
+    t = text.strip()
+    return 2 <= len(t) <= 50

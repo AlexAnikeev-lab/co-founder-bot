@@ -50,6 +50,15 @@ def get_cancel_button() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_skip_and_cancel_keyboard() -> InlineKeyboardMarkup:
+    """Кнопки Пропустить и Отмена для шагов регистрации"""
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(text="⏭ Пропустить", callback_data="reg_skip"))
+    builder.add(InlineKeyboardButton(text="❌ Отмена", callback_data="cancel"))
+    builder.adjust(2)
+    return builder.as_markup()
+
+
 def get_contact_request_keyboard() -> ReplyKeyboardMarkup:
     """Клавиатура для запроса контакта"""
     keyboard = ReplyKeyboardMarkup(

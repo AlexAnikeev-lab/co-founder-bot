@@ -12,14 +12,13 @@ config = Config()
 
 
 async def notify_admin(bot: Bot, message: str) -> None:
-    """Отправка уведомления администратору"""
-    try:
-        await bot.send_message(
-            chat_id=config.ADMIN_ID,
-            text=f"⚠️ <b>Ошибка в боте</b>\n\n{message}"
-        )
-    except Exception as e:
-        logger.error(f"Не удалось отправить уведомление администратору: {e}")
+    """Отправка уведомления всем администраторам"""
+    text = f"⚠️ <b>Ошибка в боте</b>\n\n{message}"
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await bot.send_message(chat_id=admin_id, text=text)
+        except Exception as e:
+            logger.error(f"Не удалось отправить уведомление администратору {admin_id}: {e}")
 
 
 async def handle_error(bot: Optional[Bot], error: Exception, context: str = "") -> None:

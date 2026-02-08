@@ -12,6 +12,7 @@ from aiogram.enums import ParseMode
 from config import Config
 from middlewares.auth import AuthMiddleware
 from middlewares.throttling import ThrottlingMiddleware
+from middlewares.delete_previous import BotDeletePrevious, DeletePreviousMiddleware
 from handlers import register_all_handlers
 from utils.logger import setup_logging
 
@@ -25,14 +26,16 @@ async def main() -> None:
     # Загрузка конфигурации
     config = Config()
     
-    # Инициализация бота и диспетчера
-    bot = Bot(
+    # Инициализация бота и диспетчера (BotDeletePrevious удаляет предыдущие сообщения при новой отправке)
+    bot = BotDeletePrevious(
         token=config.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher()
     
     # Регистрация middleware
+    dp.message.middleware(DeletePreviousMiddleware())
+    dp.callback_query.middleware(DeletePreviousMiddleware())
     dp.message.middleware(ThrottlingMiddleware())
     dp.callback_query.middleware(ThrottlingMiddleware())
     dp.message.middleware(AuthMiddleware())

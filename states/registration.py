@@ -14,7 +14,9 @@ class RegistrationStates(StatesGroup):
     waiting_for_photo = State()
     waiting_for_short_description = State()
     waiting_for_full_description = State()
-    waiting_for_qualities = State()
+    waiting_for_quality_1 = State()
+    waiting_for_quality_2 = State()
+    waiting_for_quality_3 = State()
     waiting_for_parent_email = State()  # Для несовершеннолетних
 
 

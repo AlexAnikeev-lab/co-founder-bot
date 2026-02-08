@@ -6,6 +6,9 @@
 import asyncio
 from repositories.database import engine, Base
 from repositories.user_repository import User
+from repositories.test_repository import TestResult
+from repositories.swipe_repository import Swipe
+from repositories.admin_archive_repository import AdminUserArchive
 
 
 async def init_database():

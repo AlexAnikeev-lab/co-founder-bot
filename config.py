@@ -19,8 +19,8 @@ class Config:
     # Токен бота
     BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
     
-    # ID администратора
-    ADMIN_ID: int = int(os.getenv("ADMIN_ID", "0"))
+    # ID администраторов (через запятую в .env, например: 123,456,789)
+    ADMIN_IDS: tuple[int, ...] = ()
     
     # Настройки базы данных
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///cofounder.db")
@@ -37,9 +37,19 @@ class Config:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
     def __init__(self):
-        """Проверка обязательных параметров"""
+        """Проверка обязательных параметров и парсинг ADMIN_IDS"""
+        raw = os.getenv("ADMIN_ID", "").strip()
+        if raw:
+            ids = []
+            for part in raw.split(","):
+                part = part.strip()
+                if part:
+                    try:
+                        ids.append(int(part))
+                    except ValueError:
+                        pass
+            self.ADMIN_IDS = tuple(ids)
         if not self.BOT_TOKEN:
             raise ValueError("BOT_TOKEN не установлен в переменных окружения")
-        
-        if not self.ADMIN_ID:
-            raise ValueError("ADMIN_ID не установлен в переменных окружения")
+        if not self.ADMIN_IDS:
+            raise ValueError("ADMIN_ID не установлен в переменных окружения (можно несколько через запятую)")
