@@ -86,6 +86,21 @@ class SwipeRepository:
             select(Swipe.swiped_id).where(Swipe.swiper_id == swiper_id)
         )
         return [row[0] for row in result.fetchall()]
+
+    @staticmethod
+    async def get_bookmarked_user_ids(
+        session: AsyncSession,
+        swiper_id: int
+    ) -> List[int]:
+        """Список telegram_id пользователей в избранном (action=bookmark), по дате добавления (новые первые)."""
+        result = await session.execute(
+            select(Swipe.swiped_id)
+            .where(
+                and_(Swipe.swiper_id == swiper_id, Swipe.action == "bookmark")
+            )
+            .order_by(Swipe.created_at.desc())
+        )
+        return [row[0] for row in result.fetchall()]
     
     @staticmethod
     async def check_mutual_like(

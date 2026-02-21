@@ -7,19 +7,19 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from keyboards.common import get_back_button, get_main_menu_button
 
 
-def get_post_registration_offer_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура после регистрации: предложение пройти основной тест или позже"""
+def get_post_registration_offer_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
+    """Клавиатура после регистрации (язык: ru/en)."""
     builder = InlineKeyboardBuilder()
     builder.add(InlineKeyboardButton(
         text="📋 Пройти основной тест",
         callback_data="start_test:main"
     ))
-    builder.add(get_main_menu_button())
+    builder.add(get_main_menu_button(lang))
     builder.adjust(1)
     return builder.as_markup()
 
 
-def get_test_list_keyboard(main_test_completed: bool = False) -> InlineKeyboardMarkup:
+def get_test_list_keyboard(main_test_completed: bool = False, lang: str = "ru") -> InlineKeyboardMarkup:
     """Список доступных тестов. Основной тест скрыт, если уже пройден (перепройти нельзя)."""
     builder = InlineKeyboardBuilder()
     if not main_test_completed:
@@ -55,12 +55,12 @@ def get_test_list_keyboard(main_test_completed: bool = False) -> InlineKeyboardM
         text="ℹ️ О тестах",
         callback_data="about_tests"
     ))
-    builder.add(get_back_button("profile"))
+    builder.add(get_back_button("profile", lang))
     builder.adjust(1)
     return builder.as_markup()
 
 
-def get_test_info_keyboard(test_type: str) -> InlineKeyboardMarkup:
+def get_test_info_keyboard(test_type: str, lang: str = "ru") -> InlineKeyboardMarkup:
     """Информация о тесте с кнопкой начала"""
     builder = InlineKeyboardBuilder()
     
@@ -68,7 +68,7 @@ def get_test_info_keyboard(test_type: str) -> InlineKeyboardMarkup:
         text="▶️ Начать тест",
         callback_data=f"start_test:{test_type}"
     ))
-    builder.add(get_back_button("tests"))
+    builder.add(get_back_button("tests", lang))
     builder.adjust(1)
     return builder.as_markup()
 
@@ -77,7 +77,8 @@ def get_test_answer_keyboard(
     answers: dict,
     question_num: int,
     test_type: str,
-    is_scale: bool = False
+    is_scale: bool = False,
+    lang: str = "ru",
 ) -> InlineKeyboardMarkup:
     """
     Клавиатура с вариантами ответов на вопрос теста
@@ -113,7 +114,7 @@ def get_test_answer_keyboard(
                 callback_data=f"test_answer:{test_type}:{question_num}:{key}"
             ))
     
-    builder.add(get_back_button("tests"))
+    builder.add(get_back_button("tests", lang))
     builder.adjust(1)
     return builder.as_markup()
 
@@ -122,7 +123,8 @@ def get_test_progress_keyboard(
     test_type: str,
     current_question: int,
     total_questions: int,
-    is_last: bool = False
+    is_last: bool = False,
+    lang: str = "ru",
 ) -> InlineKeyboardMarkup:
     """Клавиатура с прогрессом теста"""
     builder = InlineKeyboardBuilder()
@@ -138,12 +140,12 @@ def get_test_progress_keyboard(
             callback_data=f"next_question:{test_type}:{current_question + 1}"
         ))
     
-    builder.add(get_back_button("tests"))
+    builder.add(get_back_button("tests", lang))
     builder.adjust(1)
     return builder.as_markup()
 
 
-def get_test_results_keyboard() -> InlineKeyboardMarkup:
+def get_test_results_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     """Клавиатура после завершения теста"""
     builder = InlineKeyboardBuilder()
     
@@ -155,6 +157,6 @@ def get_test_results_keyboard() -> InlineKeyboardMarkup:
         text="📝 Пройти другие тесты",
         callback_data="tests"
     ))
-    builder.add(get_back_button("main_menu"))
+    builder.add(get_back_button("main_menu", lang))
     builder.adjust(1)
     return builder.as_markup()

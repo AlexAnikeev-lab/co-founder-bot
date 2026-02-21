@@ -547,60 +547,70 @@ class CompatibilityService:
     @staticmethod
     def get_compatibility_explanation(score: int, details: Dict[str, any]) -> str:
         """
-        Формирует текст «почему такая совместимость» по конкретным результатам тестов:
-        этика, цели, риск, принятие решений, коммуникация, роли (Hustler/Hacker/Hipster), штрафы.
+        Формирует структурированный текст «почему такая совместимость»:
+        секции «По тестам», «Роли в команде», «Учтено при расчёте» (штрафы), «Итог».
         """
-        parts = []
+        from texts.messages import (
+            COMPAT_SECTION_TESTS,
+            COMPAT_SECTION_ROLES,
+            COMPAT_SECTION_PENALTY,
+            COMPAT_SECTION_SUMMARY,
+            COMPAT_FACTOR_ETHICS,
+            COMPAT_FACTOR_GOALS,
+            COMPAT_FACTOR_RISK,
+            COMPAT_FACTOR_DECISION,
+            COMPAT_FACTOR_COMM,
+            COMPAT_VERY_CLOSE,
+            COMPAT_SOME_DIFF,
+            COMPAT_DIFFERENT,
+            COMPAT_SUMMARY_HIGH,
+            COMPAT_SUMMARY_MID,
+            COMPAT_SUMMARY_LOW,
+        )
+
+        blocks = []
+
+        # ——— Секция: по результатам тестов (списком) ———
         e1 = details.get("E1_scores") or {}
         scores = {
-            "ethics": e1.get("score_ethics"),
-            "goals": e1.get("score_goals"),
-            "risk": e1.get("score_risk"),
-            "decision": e1.get("score_decision"),
-            "comm": e1.get("score_comm"),
+            "ethics": (e1.get("score_ethics"), COMPAT_FACTOR_ETHICS),
+            "goals": (e1.get("score_goals"), COMPAT_FACTOR_GOALS),
+            "risk": (e1.get("score_risk"), COMPAT_FACTOR_RISK),
+            "decision": (e1.get("score_decision"), COMPAT_FACTOR_DECISION),
+            "comm": (e1.get("score_comm"), COMPAT_FACTOR_COMM),
         }
-        # Убираем None
-        scores = {k: v for k, v in scores.items() if v is not None}
+        lines = []
+        for key, (val, label) in scores.items():
+            if val is None:
+                continue
+            if val >= 80:
+                suffix = f" ({COMPAT_VERY_CLOSE})"
+            elif val >= 60:
+                suffix = ""
+            elif val >= 40:
+                suffix = f" ({COMPAT_SOME_DIFF})"
+            else:
+                suffix = f" ({COMPAT_DIFFERENT})"
+            lines.append(f"• {label} — {val}%{suffix}")
+        if lines:
+            blocks.append(f"{COMPAT_SECTION_TESTS}\n" + "\n".join(lines))
 
-        # Конкретные цифры по факторам теста
-        if scores:
-            phrases = []
-            labels = {
-                "ethics": "ценности и этика",
-                "goals": "цели и мотивация",
-                "risk": "отношение к риску",
-                "decision": "принятие решений",
-                "comm": "коммуникация",
-            }
-            for key, val in scores.items():
-                label = labels.get(key, key)
-                if val >= 80:
-                    phrases.append(f"по {label} — {val}% (очень близко)")
-                elif val >= 60:
-                    phrases.append(f"по {label} — {val}%")
-                elif val >= 40:
-                    phrases.append(f"по {label} — {val}% (есть отличия)")
-                else:
-                    phrases.append(f"по {label} — {val}% (разный подход)")
-            if phrases:
-                parts.append("По результатам тестов: " + ", ".join(phrases) + ".")
-
-        # Роли (Hustler / Hacker / Hipster) из профилей
+        # ——— Секция: роли в команде ———
         profile_a = details.get("profile_a") or {}
         profile_b = details.get("profile_b") or {}
         label_a = profile_a.get("profile_label")
         label_b = profile_b.get("profile_label")
         if label_a and label_b:
             if label_a == label_b:
-                parts.append(f"По типу мышления вы оба — <b>{label_a}</b>: такие люди быстрее находят общий язык.")
+                role_text = f"Вы оба — <b>{label_a}</b>. Такие люди быстрее находят общий язык."
             else:
-                parts.append(f"Роли в команде: вы — <b>{label_a}</b>, он(а) — <b>{label_b}</b>. Разные роли часто дополняют друг друга.")
+                role_text = f"Вы — <b>{label_a}</b>, он(а) — <b>{label_b}</b>. Разные роли часто дополняют друг друга."
+            blocks.append(f"{COMPAT_SECTION_ROLES}\n{role_text}")
 
-        # Штрафы (red flags) — если были, объясняем итог
+        # ——— Секция: штрафы (если есть) ———
         penalty = details.get("E4_penalty") or 0
         penalty_details = details.get("E4_penalty_details") or []
         if penalty > 0 and penalty_details:
-            # Кратко: из-за чего снижен балл
             rf_names = []
             for p in penalty_details:
                 if "Ethics" in p:
@@ -614,15 +624,17 @@ class CompatibilityService:
                 elif "Decision" in p:
                     rf_names.append("решениям")
             if rf_names:
-                parts.append(f"Итог немного снижен из-за отличий по: {', '.join(rf_names)}.")
+                blocks.append(
+                    f"{COMPAT_SECTION_PENALTY}\nОтличия по: {', '.join(rf_names)}. Итоговый балл немного снижен."
+                )
 
-        # Итоговая фраза
-        base = details.get("E3_base")
+        # ——— Секция: итог ———
         if score >= 75:
-            parts.append("В сумме совместимость высокая — по тестам вы хорошо подходите друг другу.")
+            summary = COMPAT_SUMMARY_HIGH
         elif score >= 55:
-            parts.append("В сумме совместимость неплохая: общие точки опоры есть, отличия можно учитывать в работе.")
+            summary = COMPAT_SUMMARY_MID
         else:
-            parts.append("Совместимость умеренная: по тестам вы заметно разные, но при желании можно найти формат сотрудничества.")
+            summary = COMPAT_SUMMARY_LOW
+        blocks.append(f"{COMPAT_SECTION_SUMMARY}\n{summary}")
 
-        return " ".join(parts)
+        return "\n\n".join(blocks)

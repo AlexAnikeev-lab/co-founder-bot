@@ -80,3 +80,16 @@ class AdminArchiveRepository:
             select(AdminUserArchive).where(AdminUserArchive.id == archive_id)
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_first_by_telegram_id(
+        session: AsyncSession, telegram_id: int
+    ) -> Optional[AdminUserArchive]:
+        """Получить последнюю по времени запись архива по telegram_id."""
+        result = await session.execute(
+            select(AdminUserArchive)
+            .where(AdminUserArchive.telegram_id == telegram_id)
+            .order_by(AdminUserArchive.archived_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()

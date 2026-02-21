@@ -13,6 +13,20 @@ user_last_request: Dict[int, float] = {}
 # Минимальный интервал между запросами (в секундах)
 THROTTLE_TIME = 1.0
 
+# Callback_data, для которых не применяем throttle (последовательные нажатия — норма)
+THROTTLE_SKIP_PREFIXES = (
+    "test_answer:",   # ответ на вопрос теста
+    "next_question:", # следующий вопрос
+    "finish_test:",   # завершение теста
+)
+
+
+def _should_skip_throttle(event: TelegramObject) -> bool:
+    """Пропустить throttle для тестов и других быстрых последовательных callback."""
+    if isinstance(event, CallbackQuery) and event.data:
+        return any(event.data.startswith(prefix) for prefix in THROTTLE_SKIP_PREFIXES)
+    return False
+
 
 class ThrottlingMiddleware(BaseMiddleware):
     """Middleware для защиты от флуда"""
@@ -24,6 +38,9 @@ class ThrottlingMiddleware(BaseMiddleware):
         data: Dict[str, Any]
     ) -> Any:
         """Проверка на флуд"""
+        if _should_skip_throttle(event):
+            return await handler(event, data)
+
         user_id = None
         
         if isinstance(event, (Message, CallbackQuery)):

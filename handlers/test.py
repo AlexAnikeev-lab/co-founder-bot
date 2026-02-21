@@ -18,6 +18,7 @@ from states.test import TestStates
 from repositories.user_repository import UserRepository
 from repositories.test_repository import TestResultRepository
 from repositories.database import get_session
+from texts.i18n import t, text_options
 from utils.errors import handle_error
 from texts.test_questions import TEST_TYPES
 from services.compatibility_service import CompatibilityService
@@ -27,35 +28,38 @@ router = Router()
 
 
 async def _get_tests_list_text_and_keyboard(user_id: int):
-    """Общая логика: текст и клавиатура списка тестов. Возвращает (text, keyboard) или (None, None) при ошибке."""
+    """Текст и клавиатура списка тестов (язык из пользователя). Возвращает (text, keyboard) или (None, None)."""
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, user_id)
         if not user or not user.is_registered:
             return None, None
+        lang = getattr(user, "language", None) or "ru"
         test_result = await TestResultRepository.get_by_user_id(session, user_id)
         main_test_completed = test_result.main_test_completed if test_result else False
-        text = (
-            "📝 <b>Тесты</b>\n\n"
-            "Выбери тест, который хочешь пройти:\n\n"
-        )
+        text = t(lang, "tests_title") + "\n\n" + t(lang, "tests_intro")
         if not main_test_completed:
-            text += "• <b>Основной тест</b> — обязательный тест из 10 вопросов\n"
-        text += "• <b>Дополнительные тесты</b> — для более точной оценки (по 10 вопросов каждый)"
-        return text, get_test_list_keyboard(main_test_completed=main_test_completed)
+            text += t(lang, "tests_main_label")
+        text += t(lang, "tests_extra_label")
+        return text, get_test_list_keyboard(main_test_completed=main_test_completed, lang=lang)
     return None, None
 
 
-@router.message(F.text == "📝 Тесты")
+@router.message(F.text.in_(text_options("profile_tests")))
 async def show_tests_list_from_message(message: Message, state: FSMContext) -> None:
-    """Показать список тестов по кнопке из меню профиля."""
+    """Показать список тестов по кнопке из меню профиля (ru/en)."""
+    try:
+        await message.delete()
+    except Exception:
+        pass
     try:
         await state.update_data(in_profile=True, profile_screen="tests")
         user_id = message.from_user.id if message.from_user else 0
         text, kb = await _get_tests_list_text_and_keyboard(user_id)
         if text is None:
-            await message.answer("❌ Ты ещё не зарегистрирован. Используй /start")
+            await message.answer(t("ru", "not_registered_use_start"))
             return
-        await message.answer(text, reply_markup=kb)
+        sent = await message.answer(text, reply_markup=kb)
+        await state.update_data(last_bot_message_id=sent.message_id)
     except Exception as e:
         logger.error(f"Ошибка в show_tests_list_from_message: {e}", exc_info=True)
         await handle_error(None, e, "show_tests_list_from_message")
@@ -71,10 +75,11 @@ async def show_tests_list(callback: CallbackQuery, state: FSMContext) -> None:
         text, kb = await _get_tests_list_text_and_keyboard(callback.from_user.id)
 
         if text is None:
+            err = t("ru", "not_registered_use_start")
             try:
-                await callback.message.edit_text("❌ Ты ещё не зарегистрирован. Используй /start")
+                await callback.message.edit_text(err)
             except Exception:
-                await callback.message.answer("❌ Ты ещё не зарегистрирован. Используй /start")
+                await callback.message.answer(err)
             return
 
         try:
@@ -93,11 +98,22 @@ async def show_tests_list(callback: CallbackQuery, state: FSMContext) -> None:
         await handle_error(None, e, "show_tests_list")
 
 
+async def _get_user_lang(user_id: int) -> str:
+    lang = "ru"
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, user_id)
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+        break
+    return lang
+
+
 @router.callback_query(F.data == "about_tests")
 async def about_tests(callback: CallbackQuery) -> None:
-    """Информация о тестах"""
+    """Информация о тестах (язык ru/en)."""
     await callback.answer()
     try:
+        lang = await _get_user_lang(callback.from_user.id)
         main_test_completed = False
         async for session in get_session():
             test_result = await TestResultRepository.get_by_user_id(session, callback.from_user.id)
@@ -120,17 +136,16 @@ async def about_tests(callback: CallbackQuery) -> None:
         try:
             await callback.message.edit_text(
                 text,
-                reply_markup=get_test_list_keyboard(main_test_completed=main_test_completed)
+                reply_markup=get_test_list_keyboard(main_test_completed=main_test_completed, lang=lang)
             )
         except Exception as e:
-            # Если не удалось отредактировать, удаляем старое и отправляем новое
             try:
                 await callback.message.delete()
             except Exception:
                 pass
             await callback.message.answer(
                 text,
-                reply_markup=get_test_list_keyboard(main_test_completed=main_test_completed)
+                reply_markup=get_test_list_keyboard(main_test_completed=main_test_completed, lang=lang)
             )
     except Exception as e:
         logger.error(f"Ошибка в about_tests: {e}", exc_info=True)
@@ -139,39 +154,36 @@ async def about_tests(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("test:"))
 async def show_test_info(callback: CallbackQuery, state: FSMContext) -> None:
-    """Показать информацию о тесте"""
+    """Показать информацию о тесте (язык ru/en)."""
     try:
         await callback.answer()
+        lang = await _get_user_lang(callback.from_user.id)
         test_type = callback.data.split(":")[1]
-        
+
         if test_type not in TEST_TYPES:
             await callback.answer("❌ Тест не найден", show_alert=True)
             return
-        
+
         test_info = TEST_TYPES[test_type]
-        
         text = (
             f"📋 <b>{test_info['name']}</b>\n\n"
             f"{test_info['description']}\n\n"
             f"Количество вопросов: {test_info['total_questions']}\n\n"
             "Готов начать?"
         )
-        
-        # Всегда пытаемся редактировать сообщение
         try:
             await callback.message.edit_text(
                 text,
-                reply_markup=get_test_info_keyboard(test_type)
+                reply_markup=get_test_info_keyboard(test_type, lang=lang)
             )
-        except Exception as e:
-            # Если не удалось отредактировать, удаляем старое и отправляем новое
+        except Exception:
             try:
                 await callback.message.delete()
             except Exception:
                 pass
             await callback.message.answer(
                 text,
-                reply_markup=get_test_info_keyboard(test_type)
+                reply_markup=get_test_info_keyboard(test_type, lang=lang)
             )
         
     except Exception as e:
@@ -263,19 +275,15 @@ async def show_question(
             f"{question_text}"
         )
         
-        # Всегда пытаемся редактировать сообщение
+        lang = await _get_user_lang(callback.from_user.id)
         try:
             await callback.message.edit_text(
                 text,
                 reply_markup=get_test_answer_keyboard(
-                    answers,
-                    question_num,
-                    test_type,
-                    is_scale
+                    answers, question_num, test_type, is_scale=is_scale, lang=lang
                 )
             )
-        except Exception as e:
-            # Если не удалось отредактировать, удаляем старое и отправляем новое
+        except Exception:
             try:
                 await callback.message.delete()
             except Exception:
@@ -283,13 +291,9 @@ async def show_question(
             await callback.message.answer(
                 text,
                 reply_markup=get_test_answer_keyboard(
-                    answers,
-                    question_num,
-                    test_type,
-                    is_scale
+                    answers, question_num, test_type, is_scale=is_scale, lang=lang
                 )
             )
-        
     except Exception as e:
         logger.error(f"Ошибка в show_question: {e}", exc_info=True)
         await handle_error(None, e, "show_question")
@@ -409,22 +413,20 @@ async def finish_test(
         
         if test_type == "main":
             text += "\n\n📊 Твой профиль рассчитан и сохранён."
-        
-        # Всегда пытаемся редактировать сообщение
+        lang = await _get_user_lang(callback.from_user.id)
         try:
             await callback.message.edit_text(
                 text,
-                reply_markup=get_test_results_keyboard()
+                reply_markup=get_test_results_keyboard(lang=lang)
             )
-        except Exception as e:
-            # Если не удалось отредактировать, удаляем старое и отправляем новое
+        except Exception:
             try:
                 await callback.message.delete()
             except Exception:
                 pass
             await callback.message.answer(
                 text,
-                reply_markup=get_test_results_keyboard()
+                reply_markup=get_test_results_keyboard(lang=lang)
             )
         
         await state.clear()

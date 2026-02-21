@@ -67,11 +67,11 @@ def get_swipe_keyboard(swiped_user_id: int, expanded: bool = False) -> InlineKey
 
     builder = InlineKeyboardBuilder()
 
-    # Кнопки действий (без пропуска)
+    # Кнопки действий: договор (лайк), избранное, дизлайк
     builder.add(
-        InlineKeyboardButton(text="👎", callback_data=f"swipe_dislike:{swiped_user_id}"),
-        InlineKeyboardButton(text="🏷", callback_data=f"swipe_bookmark:{swiped_user_id}"),
         InlineKeyboardButton(text="🤝", callback_data=f"swipe_like:{swiped_user_id}"),
+        InlineKeyboardButton(text="🏷", callback_data=f"swipe_bookmark:{swiped_user_id}"),
+        InlineKeyboardButton(text="👎", callback_data=f"swipe_dislike:{swiped_user_id}"),
     )
     builder.adjust(3)
 
@@ -102,9 +102,9 @@ def get_swipe_keyboard_from_notification(swiped_user_id: int, expanded: bool = F
 
     builder = InlineKeyboardBuilder()
     builder.add(
-        InlineKeyboardButton(text="👎", callback_data=f"swipe_notif_dislike:{swiped_user_id}"),
-        InlineKeyboardButton(text="🏷", callback_data=f"swipe_notif_bookmark:{swiped_user_id}"),
         InlineKeyboardButton(text="🤝", callback_data=f"swipe_notif_like:{swiped_user_id}"),
+        InlineKeyboardButton(text="🏷", callback_data=f"swipe_notif_bookmark:{swiped_user_id}"),
+        InlineKeyboardButton(text="👎", callback_data=f"swipe_notif_dislike:{swiped_user_id}"),
     )
     builder.adjust(3)
     if expanded:
@@ -121,4 +121,51 @@ def get_swipe_keyboard_from_notification(swiped_user_id: int, expanded: bool = F
                 callback_data=f"expand_profile_notif:{swiped_user_id}",
             )
         )
+    return builder.as_markup()
+
+
+def get_favorites_keyboard(
+    swiped_user_id: int,
+    index: int,
+    total: int,
+    expanded: bool = False,
+    lang: str = "ru",
+) -> InlineKeyboardMarkup:
+    """
+    Клавиатура для просмотра избранного: 🤝 дизлайк 👎, развернуть/свернуть, Назад / Далее.
+    """
+    from texts.messages import CARD_EXPAND_BTN, CARD_COLLAPSE_BTN
+    from texts.i18n import t
+
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(text="🤝", callback_data=f"swipe_like:{swiped_user_id}"),
+        InlineKeyboardButton(text="👎", callback_data=f"swipe_dislike:{swiped_user_id}"),
+    )
+    builder.adjust(2)
+    if expanded:
+        builder.row(
+            InlineKeyboardButton(
+                text=CARD_COLLAPSE_BTN,
+                callback_data=f"collapse_favorites:{swiped_user_id}:{index}",
+            )
+        )
+    else:
+        builder.row(
+            InlineKeyboardButton(
+                text=CARD_EXPAND_BTN,
+                callback_data=f"expand_favorites:{swiped_user_id}:{index}",
+            )
+        )
+    nav_buttons = []
+    if index > 0:
+        nav_buttons.append(
+            InlineKeyboardButton(text=t(lang, "favorites_back"), callback_data=f"favorites_prev:{index}")
+        )
+    if index < total - 1:
+        nav_buttons.append(
+            InlineKeyboardButton(text=t(lang, "favorites_next"), callback_data=f"favorites_next:{index}")
+        )
+    if nav_buttons:
+        builder.row(*nav_buttons)
     return builder.as_markup()

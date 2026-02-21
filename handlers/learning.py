@@ -1,5 +1,5 @@
 """
-Обработчики обучающего режима
+Обработчики обучающего режима (язык: ru/en).
 """
 
 import logging
@@ -13,56 +13,59 @@ from keyboards.common import get_back_button
 from keyboards.menu import get_main_menu_keyboard
 from repositories.user_repository import UserRepository
 from repositories.database import get_session
+from texts.i18n import t, text_options
 from utils.errors import handle_error
-from texts.messages import (
-    LESSON_1_TITLE,
-    LESSON_1_CONTENT,
-    LESSON_2_TITLE,
-    LESSON_2_CONTENT,
-)
 
 logger = logging.getLogger(__name__)
 router = Router()
 
-# Уроки: id -> (заголовок, контент)
-LESSONS: dict[int, tuple[str, str]] = {
-    1: (LESSON_1_TITLE, LESSON_1_CONTENT),
-    2: (LESSON_2_TITLE, LESSON_2_CONTENT),
-}
+LESSON_IDS = (1, 2)
 
 
-def get_learning_menu_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура меню обучения"""
+async def _get_user_lang(user_id: int) -> str:
+    lang = "ru"
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, user_id)
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+        break
+    return lang
+
+
+def get_learning_menu_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
+    """Клавиатура меню обучения (язык: ru/en)."""
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text="Модуль 1", callback_data="learning_module:1"))
-    builder.add(InlineKeyboardButton(text="Модуль 2", callback_data="learning_module:2"))
-    builder.add(get_back_button("main_menu"))
+    builder.add(InlineKeyboardButton(text=t(lang, "learning_module_1"), callback_data="learning_module:1"))
+    builder.add(InlineKeyboardButton(text=t(lang, "learning_module_2"), callback_data="learning_module:2"))
+    builder.add(get_back_button("main_menu", lang))
     builder.adjust(1)
     return builder.as_markup()
 
 
-def get_module_lessons_keyboard(module_id: str) -> InlineKeyboardMarkup:
-    """Клавиатура уроков модуля. В модуле 1 — 2 урока о бизнесе."""
+def get_module_lessons_keyboard(module_id: str, lang: str = "ru") -> InlineKeyboardMarkup:
+    """Клавиатура уроков модуля (язык: ru/en)."""
     builder = InlineKeyboardBuilder()
     if module_id == "1":
-        for lid, (title, _) in LESSONS.items():
+        for lid in LESSON_IDS:
             builder.add(
                 InlineKeyboardButton(
-                    text=f"📌 {title}",
+                    text=f"📌 {t(lang, f'lesson_{lid}_title')}",
                     callback_data=f"learning_lesson:1:{lid}",
                 )
             )
-    builder.add(InlineKeyboardButton(text="⬅ Назад", callback_data="learning"))
+    builder.add(get_back_button("learning", lang))
     builder.adjust(1)
     return builder.as_markup()
 
 
-@router.message(F.text == "📚 Обучение")
+@router.message(F.text.in_(text_options("menu_learning")))
 @router.callback_query(F.data == "learning")
 async def show_learning_menu(event: Message | CallbackQuery, state: FSMContext) -> None:
-    """Показать меню обучения (редактируем прошлое сообщение, не шлём новое)."""
-    text = "📚 <b>Обучение</b>\n\nВыбери модуль:"
-    reply_markup = get_learning_menu_keyboard()
+    """Показать меню обучения (язык ru/en)."""
+    user_id = event.from_user.id if event.from_user else 0
+    lang = await _get_user_lang(user_id)
+    text = t(lang, "learning_title") + "\n\n" + t(lang, "learning_choose_module")
+    reply_markup = get_learning_menu_keyboard(lang)
     try:
         if isinstance(event, CallbackQuery):
             await event.answer()
@@ -78,6 +81,10 @@ async def show_learning_menu(event: Message | CallbackQuery, state: FSMContext) 
                 await state.update_data(last_bot_message_id=sent.message_id)
         else:
             message = event
+            try:
+                await message.delete()
+            except Exception:
+                pass
             data = await state.get_data()
             mid = data.get("last_bot_message_id")
             if mid:
@@ -104,21 +111,16 @@ async def show_learning_menu(event: Message | CallbackQuery, state: FSMContext) 
 
 @router.callback_query(F.data.startswith("learning_module:"))
 async def show_learning_module(callback: CallbackQuery, state: FSMContext) -> None:
-    """Показать модуль обучения (редактируем сообщение)."""
+    """Показать модуль обучения (язык ru/en)."""
     await callback.answer()
+    lang = await _get_user_lang(callback.from_user.id)
     module_id = callback.data.split(":")[1]
     if module_id == "1":
-        text = (
-            f"📚 <b>Модуль {module_id}</b>\n\n"
-            "Выбери урок о бизнесе и стартапах:"
-        )
-        reply_markup = get_module_lessons_keyboard(module_id)
+        text = f"📚 <b>{t(lang, 'learning_module')} {module_id}</b>\n\n" + t(lang, "learning_choose_lesson")
+        reply_markup = get_module_lessons_keyboard(module_id, lang)
     else:
-        text = (
-            f"📚 <b>Модуль {module_id}</b>\n\n"
-            "Уроки в разработке."
-        )
-        reply_markup = get_learning_menu_keyboard()
+        text = f"📚 <b>{t(lang, 'learning_module')} {module_id}</b>\n\n" + t(lang, "lessons_coming")
+        reply_markup = get_learning_menu_keyboard(lang)
     try:
         await callback.message.edit_text(text=text, reply_markup=reply_markup)
         await state.update_data(last_bot_message_id=callback.message.message_id)
@@ -133,7 +135,7 @@ async def show_learning_module(callback: CallbackQuery, state: FSMContext) -> No
 
 @router.callback_query(F.data.startswith("learning_lesson:"))
 async def show_lesson(callback: CallbackQuery, state: FSMContext) -> None:
-    """Показать контент урока (редактируем сообщение)."""
+    """Показать контент урока (язык ru/en)."""
     await callback.answer()
     parts = callback.data.split(":")
     if len(parts) < 3:
@@ -143,12 +145,16 @@ async def show_lesson(callback: CallbackQuery, state: FSMContext) -> None:
         lesson_id = int(lesson_id_str)
     except ValueError:
         return
-    if lesson_id not in LESSONS:
+    if lesson_id not in LESSON_IDS:
         return
-    title, content = LESSONS[lesson_id]
+    lang = await _get_user_lang(callback.from_user.id)
+    content = t(lang, f"lesson_{lesson_id}_content")
     builder = InlineKeyboardBuilder()
     builder.add(
-        InlineKeyboardButton(text="⬅ К модулю", callback_data=f"learning_module:{module_id}")
+        InlineKeyboardButton(
+            text=t(lang, "lesson_back_to_module"),
+            callback_data=f"learning_module:{module_id}",
+        )
     )
     try:
         await callback.message.edit_text(

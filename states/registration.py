@@ -7,6 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 class RegistrationStates(StatesGroup):
     """Состояния регистрации"""
+    waiting_for_language = State()
     waiting_for_age = State()
     waiting_for_legal_agreement = State()
     waiting_for_telegram_access = State()
@@ -26,4 +27,6 @@ class ProfileEditStates(StatesGroup):
     editing_photo = State()
     editing_short_description = State()
     editing_full_description = State()
-    editing_qualities = State()
+    editing_quality_1 = State()
+    editing_quality_2 = State()
+    editing_quality_3 = State()

@@ -43,6 +43,32 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
 # Пагинация и просмотр пользователя — callback_data с числом (страница или id)
 USERS_PAGE_PREFIX = "adm_p:"
 USER_VIEW_PREFIX = "adm_u:"
+# Действия с пользователем по telegram_id
+ADM_BAN_PREFIX = "adm_ban:"
+ADM_WRITE_PREFIX = "adm_write:"
+ADM_PROFILE_PREFIX = "adm_profile:"
+
+
+def get_admin_user_view_keyboard(telegram_id: int, ban_status: str) -> InlineKeyboardMarkup:
+    """Клавиатура карточки пользователя: бан, написать, анкета, назад."""
+    builder = InlineKeyboardBuilder()
+    status = (ban_status or "none").strip().lower()
+    if status == "full":
+        ban_text = "🔴 Полный бан (нажать: снять)"
+    elif status == "shadow":
+        ban_text = "🟠 Теневой бан (нажать: полный бан)"
+    else:
+        ban_text = "🟢 Не заблокирован (нажать: теневой бан)"
+    builder.add(
+        InlineKeyboardButton(text=ban_text, callback_data=f"{ADM_BAN_PREFIX}{telegram_id}")
+    )
+    builder.add(
+        InlineKeyboardButton(text="✉️ Написать", callback_data=f"{ADM_WRITE_PREFIX}{telegram_id}"),
+        InlineKeyboardButton(text="👤 Посмотреть анкету", callback_data=f"{ADM_PROFILE_PREFIX}{telegram_id}"),
+    )
+    builder.adjust(1, 2)
+    builder.add(InlineKeyboardButton(text="🔙 К списку пользователей", callback_data=AdminCallbackData(action="users").pack()))
+    return builder.as_markup()
 
 
 def get_admin_users_page_keyboard(

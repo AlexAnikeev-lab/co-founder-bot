@@ -3,18 +3,88 @@
 """
 
 import re
+from datetime import date
 from typing import Optional
+
+# Названия месяцев по-русски (родительный падеж) для парсинга даты
+MONTH_NAMES_RU = {
+    "января": 1, "февраля": 2, "марта": 3, "апреля": 4, "мая": 5, "июня": 6,
+    "июля": 7, "августа": 8, "сентября": 9, "октября": 10, "ноября": 11, "декабря": 12,
+}
+
+
+def _normalize_year(y: int) -> int:
+    """Двузначный год: 09 -> 2009, 25 -> 2025, 99 -> 1999."""
+    if y >= 100:
+        return y
+    if y <= 30:  # 00–30 считаем 2000–2030
+        return 2000 + y
+    return 1900 + y  # 31–99 -> 1931–1999
+
+
+def parse_birth_date(text: str) -> Optional[date]:
+    """
+    Парсит дату рождения из строки.
+    Принимает: 31.07.2009, 31.07.09, 31 июля 2009, 31 июля 09.
+    """
+    if not text or not text.strip():
+        return None
+    s = text.strip()
+
+    # 31.07.2009 или 31.07.09
+    m = re.match(r"^(\d{1,2})[.\s]+(\d{1,2})[.\s]+(\d{2,4})$", s, re.IGNORECASE)
+    if m:
+        day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if year < 100:
+            year = _normalize_year(year)
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
+
+    # 31 июля 2009 или 31 июля 09
+    for name, month in MONTH_NAMES_RU.items():
+        if name not in s.lower():
+            continue
+        m = re.match(r"^(\d{1,2})\s+" + re.escape(name) + r"\s+(\d{2,4})$", s, re.IGNORECASE)
+        if m:
+            day, year = int(m.group(1)), int(m.group(2))
+            if year < 100:
+                year = _normalize_year(year)
+            try:
+                return date(year, month, day)
+            except ValueError:
+                return None
+    return None
+
+
+def age_from_birth_date(birth: date) -> int:
+    """Возраст в полных годах на сегодня."""
+    today = date.today()
+    age = today.year - birth.year
+    if (today.month, today.day) < (birth.month, birth.day):
+        age -= 1
+    return age
 
 
 def validate_age(age_str: str) -> Optional[int]:
-    """Валидация возраста"""
+    """Валидация возраста: число 1–120 или дата рождения (дд.мм.гггг / 31 июля 2009 и т.д.)."""
+    s = (age_str or "").strip()
+    # Сначала пробуем как число (как раньше)
     try:
-        age = int(age_str)
+        age = int(s)
         if 1 <= age <= 120:
             return age
-        return None
     except ValueError:
+        pass
+    # Пробуем как дату рождения
+    birth = parse_birth_date(s)
+    if birth is None:
         return None
+    age = age_from_birth_date(birth)
+    if 1 <= age <= 120:
+        return age
+    return None
 
 
 def validate_name(name: str) -> bool:

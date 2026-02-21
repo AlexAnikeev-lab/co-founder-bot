@@ -3,69 +3,64 @@
 """
 
 from aiogram.types import (
-    InlineKeyboardMarkup, 
+    InlineKeyboardMarkup,
     InlineKeyboardButton,
     ReplyKeyboardMarkup,
-    KeyboardButton
+    KeyboardButton,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
+from texts.i18n import t
 
-def get_main_menu_keyboard(is_minor: bool = False) -> ReplyKeyboardMarkup:
-    """Главное меню (прикрепленное к клавиатуре)"""
+
+def get_main_menu_keyboard(is_minor: bool = False, lang: str = "ru") -> ReplyKeyboardMarkup:
+    """Главное меню: первый ряд 📚 🤝 👤, второй ряд ⭐️ Co-founder Subscription (язык: ru/en)."""
     builder = ReplyKeyboardBuilder()
-    
-    if is_minor:
-        # Меню для несовершеннолетних
-        builder.add(KeyboardButton(text="📚 Обучение"))
-        builder.add(KeyboardButton(text="ℹ️ Информация"))
-        builder.add(KeyboardButton(text="👤 Профиль"))
-    else:
-        # Полное меню
-        builder.add(KeyboardButton(text="📚 Обучение"))
-        builder.add(KeyboardButton(text="🤝 Партнеры"))
-        builder.add(KeyboardButton(text="ℹ️ Информация"))
-        builder.add(KeyboardButton(text="👤 Профиль"))
-        builder.add(KeyboardButton(text="⭐ Co-founder Premium"))
-    
-    builder.adjust(2)  # 2 кнопки в ряд
+    builder.add(KeyboardButton(text=t(lang, "menu_learning")))
+    if not is_minor:
+        builder.add(KeyboardButton(text=t(lang, "menu_partners")))
+    builder.add(KeyboardButton(text=t(lang, "menu_profile")))
+    if not is_minor:
+        builder.add(KeyboardButton(text=t(lang, "menu_premium")))
+    # Первый ряд: 3 кнопки (📚 🤝 👤), второй ряд: Subscription
+    builder.adjust(3 if not is_minor else 2)
     return builder.as_markup(resize_keyboard=True)
 
 
-# Тексты кнопок reply-меню в разделе Профиль
+# Для совместимости (сопоставление кнопок в хендлерах)
 PROFILE_REPLY_TESTS = "📝 Тесты"
 PROFILE_REPLY_PEOPLE = "👥 Люди"
 PROFILE_REPLY_PREMIUM = "⭐ Co-founder Premium"
 PROFILE_REPLY_BACK = "◀️ Назад"
 
 
-def get_profile_reply_keyboard(is_minor: bool = False) -> ReplyKeyboardMarkup:
-    """Reply-клавиатура в разделе Профиль: Тесты, Люди, Premium, Назад."""
+def get_profile_reply_keyboard(is_minor: bool = False, lang: str = "ru") -> ReplyKeyboardMarkup:
+    """Reply-клавиатура в разделе Профиль (язык: ru/en)."""
     builder = ReplyKeyboardBuilder()
-    builder.add(KeyboardButton(text=PROFILE_REPLY_TESTS))
+    builder.add(KeyboardButton(text=t(lang, "profile_tests")))
     if not is_minor:
-        builder.add(KeyboardButton(text=PROFILE_REPLY_PEOPLE))
-        builder.add(KeyboardButton(text=PROFILE_REPLY_PREMIUM))
-    builder.add(KeyboardButton(text=PROFILE_REPLY_BACK))
+        builder.add(KeyboardButton(text=t(lang, "profile_people")))
+        builder.add(KeyboardButton(text=t(lang, "profile_premium")))
+    builder.add(KeyboardButton(text=t(lang, "profile_back")))
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
 
 
-def get_profile_keyboard(is_minor: bool = False) -> InlineKeyboardMarkup:
-    """Под анкетой: Изменить, Удалить профиль (без кнопки Назад)."""
+def get_profile_keyboard(is_minor: bool = False, lang: str = "ru") -> InlineKeyboardMarkup:
+    """Под анкетой: Изменить, Удалить профиль, Сменить язык."""
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text="✏️ Изменить", callback_data="edit_profile"))
-    builder.add(InlineKeyboardButton(text="🗑 Удалить профиль", callback_data="delete_profile"))
+    builder.add(InlineKeyboardButton(text=t(lang, "edit_profile"), callback_data="edit_profile"))
+    builder.add(InlineKeyboardButton(text=t(lang, "delete_profile"), callback_data="delete_profile"))
+    builder.add(InlineKeyboardButton(text=t(lang, "change_language"), callback_data="profile_change_language"))
     builder.adjust(1)
     return builder.as_markup()
 
 
-def get_people_keyboard() -> InlineKeyboardMarkup:
-    """Меню раздела Люди"""
+def get_people_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
+    """Меню раздела Люди (язык: ru/en)."""
     builder = InlineKeyboardBuilder()
-    
-    builder.add(InlineKeyboardButton(text="🔍 Поиск людей", callback_data="search_people"))
-    builder.add(InlineKeyboardButton(text="⭐ Избранные", callback_data="favorites"))
-    builder.add(InlineKeyboardButton(text="🤝 Совпадения", callback_data="matches"))
+    builder.add(InlineKeyboardButton(text=t(lang, "people_search"), callback_data="search_people"))
+    builder.add(InlineKeyboardButton(text=t(lang, "people_favorites"), callback_data="favorites"))
+    builder.add(InlineKeyboardButton(text=t(lang, "people_matches"), callback_data="matches"))
     builder.adjust(1)
     return builder.as_markup()

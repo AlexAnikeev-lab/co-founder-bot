@@ -16,9 +16,13 @@ from keyboards.admin import (
     get_admin_keyboard,
     get_admin_clear_confirm_keyboard,
     get_admin_users_page_keyboard,
+    get_admin_user_view_keyboard,
     AdminCallbackData,
     USERS_PAGE_PREFIX,
     USER_VIEW_PREFIX,
+    ADM_BAN_PREFIX,
+    ADM_WRITE_PREFIX,
+    ADM_PROFILE_PREFIX,
 )
 from texts.messages import (
     ADMIN_ACCESS_DENIED,
@@ -282,9 +286,25 @@ async def admin_users_page(callback: CallbackQuery, state: FSMContext) -> None:
         )
 
 
+def _format_admin_user_view(record, user) -> str:
+    """Текст карточки пользователя для админа: архив + живой статус и бан."""
+    lines = [
+        "👤 <b>Пользователь</b>",
+        "",
+        f"📱 <b>Telegram ID:</b> <code>{record.telegram_id}</code>",
+        f"👤 <b>Имя:</b> {record.name or '—'}",
+        f"📧 <b>Username:</b> @{record.username}" if (record.username and record.username.strip()) else "📧 <b>Username:</b> —",
+        f"🎂 <b>Возраст:</b> {record.age or '—'}",
+        f"🔒 <b>Бан:</b> {(user.ban_status or 'none') if user else '—'}",
+        "",
+        "📝 <b>Кратко:</b> " + (record.short_description[:80] + "…" if record.short_description and len(record.short_description) > 80 else (record.short_description or "—")),
+    ]
+    return "\n".join(lines).replace("@None", "—")
+
+
 @router.callback_query(F.data.startswith(USER_VIEW_PREFIX))
 async def admin_user_view(callback: CallbackQuery, state: FSMContext) -> None:
-    """Просмотр одной записи архива — отдельное сообщение с полной информацией."""
+    """Просмотр пользователя: инфо, кнопки бан / написать / анкета."""
     if not callback.from_user or not callback.message:
         return
     if not _is_admin(callback.from_user.id):
@@ -296,16 +316,153 @@ async def admin_user_view(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("Ошибка", show_alert=True)
         return
     await callback.answer()
+    record = None
+    user = None
     async for session in get_session():
         record = await AdminArchiveRepository.get_by_id(session, archive_id)
+        if record:
+            user = await UserRepository.get_by_telegram_id(session, record.telegram_id)
         break
-    else:
-        record = None
     if not record:
         await callback.message.answer("❌ Запись не найдена.")
         return
-    text = "👤 <b>Данные из архива (на момент регистрации)</b>\n\n" + _format_archive_user(record)
-    await callback.message.answer(text)
+    ban_status = (user.ban_status or "none") if user else "none"
+    text = _format_admin_user_view(record, user)
+    kb = get_admin_user_view_keyboard(record.telegram_id, ban_status)
+    try:
+        await callback.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, reply_markup=kb)
+
+
+# --- Цикл бана: none -> shadow -> full -> none ---
+@router.callback_query(F.data.startswith(ADM_BAN_PREFIX))
+async def admin_user_ban_toggle(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+    try:
+        telegram_id = int(callback.data.split(":", 1)[1])
+    except (IndexError, ValueError):
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    await callback.answer()
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, telegram_id)
+        if not user:
+            await callback.message.answer("❌ Пользователь не найден в базе.")
+            return
+        current = (user.ban_status or "none").strip().lower()
+        if current == "none":
+            next_status = "shadow"
+        elif current == "shadow":
+            next_status = "full"
+        else:
+            next_status = "none"
+        await UserRepository.update(session, user, ban_status=next_status)
+        record = await AdminArchiveRepository.get_first_by_telegram_id(session, telegram_id)
+        user = await UserRepository.get_by_telegram_id(session, telegram_id)
+        text = _format_admin_user_view(record, user) if record else f"👤 ID: {telegram_id}\n🔒 Бан: {next_status}"
+        kb = get_admin_user_view_keyboard(telegram_id, next_status)
+        try:
+            await callback.message.edit_text(text, reply_markup=kb)
+        except Exception:
+            await callback.message.answer(text, reply_markup=kb)
+        break
+
+
+# --- Написать пользователю: FSM ---
+ADMIN_WRITE_TO_KEY = "admin_write_to"
+
+
+@router.callback_query(F.data.startswith(ADM_WRITE_PREFIX))
+async def admin_user_write_start(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+    try:
+        telegram_id = int(callback.data.split(":", 1)[1])
+    except (IndexError, ValueError):
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    await callback.answer()
+    await state.update_data(**{ADMIN_WRITE_TO_KEY: telegram_id})
+    await callback.message.answer(
+        "✉️ Введите сообщение для пользователя (текстом). Отправьте его в чат.\nОтмена: /cancel"
+    )
+
+
+async def _admin_write_filter(event, data: dict) -> bool:
+    """Фильтр: только когда админ в режиме «Написать пользователю»."""
+    state = data.get("state")
+    if not state:
+        return False
+    d = await state.get_data()
+    return d.get(ADMIN_WRITE_TO_KEY) is not None
+
+
+@router.message(F.text == "/cancel", F.func(_admin_write_filter))
+async def admin_write_cancel(message: Message, state: FSMContext) -> None:
+    if not message.from_user or not _is_admin(message.from_user.id):
+        return
+    await state.update_data(**{ADMIN_WRITE_TO_KEY: None})
+    await message.answer("Отправка отменена.")
+
+
+@router.message(F.text, F.func(_admin_write_filter))
+async def admin_user_write_send(message: Message, state: FSMContext) -> None:
+    """Если админ в режиме «Написать» — отправить сообщение пользователю."""
+    if not message.from_user or not _is_admin(message.from_user.id):
+        return
+    data = await state.get_data()
+    telegram_id = data.get(ADMIN_WRITE_TO_KEY)
+    if telegram_id is None:
+        return
+    await state.update_data(**{ADMIN_WRITE_TO_KEY: None})
+    try:
+        await message.bot.send_message(
+            telegram_id,
+            "📩 <b>Сообщение от администрации:</b>\n\n" + message.text,
+        )
+        await message.answer("✅ Сообщение отправлено пользователю.")
+    except Exception as e:
+        logger.exception("Ошибка отправки сообщения пользователю: %s", e)
+        await message.answer("❌ Не удалось отправить сообщение.")
+
+
+# --- Посмотреть анкету пользователя ---
+@router.callback_query(F.data.startswith(ADM_PROFILE_PREFIX))
+async def admin_user_profile_view(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+    try:
+        telegram_id = int(callback.data.split(":", 1)[1])
+    except (IndexError, ValueError):
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    await callback.answer()
+    from handlers.swipe import format_user_profile
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, telegram_id)
+        if not user:
+            await callback.message.answer("❌ Пользователь не найден.")
+            return
+        profile_text = format_user_profile(user, compatibility=None)
+        if user.photo_id:
+            await callback.message.answer_photo(
+                photo=user.photo_id,
+                caption=profile_text,
+            )
+        else:
+            await callback.message.answer(profile_text)
+        break
 
 
 def register_handlers(dp) -> None:

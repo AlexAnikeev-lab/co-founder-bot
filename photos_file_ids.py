@@ -1,0 +1,19 @@
+# Сгенерировано скриптом upload_photos_for_file_id.py. Не редактируй вручную.
+# Чтобы обновить — заново запусти скрипт.
+
+REGISTRATION_PHOTO_FILE_IDS = {
+    "welcome_1": "AgACAgIAAxkDAAIH5WmSESvatemjeToVdq8sWuqqJ9MfAAKyGGsbaPyRSBBXZigVOqzoAQADAgADdwADOgQ",
+    "welcome_2": "AgACAgIAAxkDAAIH62mSEUuT_NNYyVNwZuMMLBjPqw61AAKzGGsbaPyRSJzszGnVWBYQAQADAgADdwADOgQ",
+    "age": "AgACAgIAAxkDAAIH62mSEVF4_FdcBa309k8X5ouTFxVTAAK1GGsbaPyRSI_4KCLLvG4qAQADAgADdwADOgQ",
+    "legal": "AgACAgIAAxkDAAIH9mmSE0oxzeMqHOrS7Ih0sPRLrY-uAAJrF2sbJQaQSBgUqTT5X-BnAQADAgADdwADOgQ",
+    "learning_mode": "AgACAgIAAxkDAAIH9mmSE0oxzeMqHOrS7Ih0sPRLrY-uAAJrF2sbJQaQSBgUqTT5X-BnAQADAgADdwADOgQ",
+    "telegram": "AgACAgIAAxkDAAIH92mSE1TYmj1HaehimGSNjuBYv1xRAAJsF2sbJQaQSETFFQp28tuzAQADAgADdwADOgQ",
+    "name": "AgACAgIAAxkDAAIH-GmSE1rgdQVoakiXhgACZTOKYAx-AAJtF2sbJQaQSJOd39OygAF8AQADAgADdwADOgQ",
+    "photo": "AgACAgIAAxkDAAIH-WmSE2CJyAJqf4-4WU2C9KH8dYi8AAJuF2sbJQaQSDDSmCYM8Q3zAQADAgADdwADOgQ",
+    "short_desc": "AgACAgIAAxkDAAIH_WmSE3WpsyaQ1kljcRaHnKNOgIKKAAJzF2sbJQaQSL3GWbJQ5UBHAQADAgADdwADOgQ",
+    "full_desc": "AgACAgIAAxkDAAIH_mmSE3qlRxOjML2vZUZXYA8cpj81AAJ1F2sbJQaQSBsS-i_eiFyRAQADAgADdwADOgQ",
+    "quality_1": "AgACAgIAAxkDAAIH-mmSE2REYJQY9ieIrGU7WE1TxkdKAAJvF2sbJQaQSKcWMqtinLDgAQADAgADdwADOgQ",
+    "quality_2": "AgACAgIAAxkDAAIH-2mSE2hC1Chjko2VRTF8ZOJrTFEtAAJwF2sbJQaQSIxigOq26Xo7AQADAgADdwADOgQ",
+    "quality_3": "AgACAgIAAxkDAAIH_GmSE21YhBIlNYDkDqg7iKl5dqILAAJyF2sbJQaQSM1aMIi3DZPyAQADAgADdwADOgQ",
+    "success": "AgACAgIAAxkDAAIH_2mSE3-d9JFt5cYumgYORJzKD1m9AAJ2F2sbJQaQSCxguKV6waacAQADAgADdwADOgQ",
+}
