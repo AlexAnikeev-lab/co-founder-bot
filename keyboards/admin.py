@@ -31,7 +31,7 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
     )
     builder.add(
         InlineKeyboardButton(
-            text="🗑 Очистить лайки и дизлайки",
+            text="🗑 Очистить все свайпы",
             callback_data=AdminCallbackData(action="clear_swipes").pack()
         )
     )

@@ -151,20 +151,21 @@ pip install -r requirements.txt
 
 Подробные инструкции см. в файле [FIX_RUST.md](FIX_RUST.md) или [INSTALL.md](INSTALL.md).
 
-### 6. Инициализация базы данных
+### 6. База данных
+
+**Таблицы создаются автоматически** при первом запуске бота (`python main.py`). Отдельно запускать `init_db.py` не обязательно.
+
+При необходимости можно инициализировать БД вручную:
 
 ```bash
-source .venv/bin/activate
 python init_db.py
 ```
 
-**Если база данных уже создана и нужно добавить новые поля:**
+Если база уже создана и нужно добавить новые поля:
 
 ```bash
 python migrate_db.py
 ```
-
-Это добавит недостающие поля в существующую базу данных без потери данных.
 
 ### 7. Запуск бота
 
@@ -172,6 +173,28 @@ python migrate_db.py
 source .venv/bin/activate
 python main.py
 ```
+
+### Запуск в Docker
+
+Сборка образа:
+
+```bash
+docker build -t co-founder-bot .
+```
+
+Запуск с передачей переменных окружения и сохранением БД в volume:
+
+```bash
+docker run -d --name co-founder \
+  -e BOT_TOKEN=your_bot_token \
+  -e ADMIN_ID=123456789 \
+  -v co-founder-data:/app/data \
+  co-founder-bot
+```
+
+Опционально: `OPENROUTER_API_KEY`, `DATABASE_URL` (по умолчанию `sqlite+aiosqlite:////app/data/cofounder.db`), `LOG_LEVEL`. Файл `.env` в образ не копируется — все настройки задавайте через `-e` или `--env-file`.
+
+Таблицы БД создаются автоматически при первом запуске контейнера.
 
 ## Логика работы бота
 

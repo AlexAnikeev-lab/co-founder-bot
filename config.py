@@ -63,7 +63,24 @@ def get_registration_photo_file_id(step: str) -> Optional[str]:
     """file_id для шага (если уже загружали скриптом). По file_id отправка мгновенная."""
     return REGISTRATION_PHOTO_FILE_IDS.get(step)
 
-load_dotenv()
+
+def _load_dotenv_safe() -> None:
+    """Загрузка .env с поддержкой UTF-8 и Windows (cp1251)."""
+    env_path = PROJECT_ROOT / ".env"
+    if not env_path.exists():
+        load_dotenv()
+        return
+    for encoding in ("utf-8", "cp1251", "utf-8-sig"):
+        try:
+            with open(env_path, "r", encoding=encoding) as f:
+                load_dotenv(stream=f)
+            return
+        except UnicodeDecodeError:
+            continue
+    load_dotenv()
+
+
+_load_dotenv_safe()
 
 
 class Config:

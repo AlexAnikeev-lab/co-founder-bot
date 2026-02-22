@@ -102,7 +102,7 @@ async def admin_refresh(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(AdminCallbackData.filter(F.action == "clear_swipes"))
 async def admin_clear_swipes_ask(callback: CallbackQuery, state: FSMContext) -> None:
-    """Запрос подтверждения очистки лайков и дизлайков"""
+    """Запрос подтверждения очистки всех свайпов"""
     if not callback.from_user or not callback.message:
         return
     if not _is_admin(callback.from_user.id):
@@ -124,7 +124,7 @@ async def admin_clear_swipes_ask(callback: CallbackQuery, state: FSMContext) -> 
 
 @router.callback_query(AdminCallbackData.filter(F.action == "clear_confirm"))
 async def admin_clear_swipes_do(callback: CallbackQuery, state: FSMContext) -> None:
-    """Выполнить очистку лайков и дизлайков"""
+    """Выполнить очистку всех свайпов (лайки, дизлайки, пропуски, закладки)"""
     if not callback.from_user or not callback.message:
         return
     if not _is_admin(callback.from_user.id):
@@ -134,9 +134,9 @@ async def admin_clear_swipes_do(callback: CallbackQuery, state: FSMContext) -> N
     deleted = 0
     async for session in get_session():
         try:
-            deleted = await SwipeRepository.clear_likes_and_dislikes(session)
+            deleted = await SwipeRepository.clear_all_swipes(session)
         except Exception as e:
-            logger.exception("Ошибка при очистке лайков/дизлайков: %s", e)
+            logger.exception("Ошибка при очистке свайпов: %s", e)
             await callback.answer("Ошибка при очистке", show_alert=True)
             return
         break

@@ -202,3 +202,10 @@ class SwipeRepository:
         )
         await session.commit()
         return result.rowcount or 0
+
+    @staticmethod
+    async def clear_all_swipes(session: AsyncSession) -> int:
+        """Удалить все записи свайпов (лайки, дизлайки, пропуски, закладки). Возвращает количество удалённых."""
+        result = await session.execute(delete(Swipe))
+        await session.commit()
+        return result.rowcount or 0

@@ -1,0 +1,39 @@
+# Виртуальное окружение и кэш Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Переменные окружения (в Docker передавать через -e или env-file)
+.env
+.env.*
+!.env.example
+
+# Git и IDE
+.git/
+.gitignore
+.cursor/
+.idea/
+*.swp
+*.swo
+*~
+
+# Логи и локальная БД (в контейнере БД в volume)
+*.log
+*.db
+cofounder.db
+
+# Документация и прочее (не нужны в образе)
+README.md
+*.md
+.DS_Store
+
+# Миграции вручную (таблицы создаются при старте)
+migrate_*.py

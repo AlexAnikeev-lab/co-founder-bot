@@ -8,6 +8,7 @@ from typing import Optional
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from aiogram.filters import BaseFilter
 from repositories.database import get_session
 from repositories.user_repository import User, UserRepository
 from repositories.test_repository import TestResult, TestResultRepository
@@ -33,12 +34,77 @@ from texts.messages import (
     CARD_EXPAND_BTN,
     CARD_COLLAPSE_BTN,
 )
+from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import select, and_
 
 router = Router()
 logger = logging.getLogger(__name__)
+
+# Текст уведомления «вас лайкнули»
+LIKE_NOTIFICATION_TEXT = (
+    "🤝 <b>Кто-то проявил интерес</b>\n\n"
+    "{swiper_name} отметил(а) вашу анкету.\n\n"
+    "Нажмите «Посмотреть», чтобы открыть анкету и ответить."
+)
+
+
+async def _send_like_notification(
+    bot: Bot,
+    chat_id: int,
+    swiper_name: str,
+    swiper_user_id: int,
+) -> bool:
+    """
+    Отправить уведомление «вас лайкнули» в чат chat_id.
+    chat_id — telegram_id пользователя, которому отправляем (тот, кого лайкнули).
+    Возвращает True при успехе. При ошибке логирует и возвращает False.
+    """
+    try:
+        view_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="👀 Посмотреть", callback_data=f"view_liker:{swiper_user_id}")]
+        ])
+        await bot.send_message(
+            chat_id=chat_id,
+            text=LIKE_NOTIFICATION_TEXT.format(swiper_name=swiper_name),
+            reply_markup=view_kb,
+            parse_mode="HTML",
+        )
+        logger.info("Уведомление о лайке отправлено: chat_id=%s, от swiper_id=%s", chat_id, swiper_user_id)
+        return True
+    except Exception as e:
+        logger.error(
+            "Не удалось отправить уведомление о лайке chat_id=%s (возможно, пользователь не начинал бота или заблокировал): %s",
+            chat_id,
+            e,
+            exc_info=True,
+        )
+        return False
+
+
+class _FilterInPartners(BaseFilter):
+    """Сообщение обрабатываем только если пользователь в разделе Партнёры и смотрит анкету (лайк/закладка/дизлайк)."""
+
+    async def __call__(self, event: Message, **kwargs: object) -> bool:
+        state: FSMContext | None = kwargs.get("state") if kwargs else None
+        if not state:
+            return False
+        d = await state.get_data()
+        return bool(d.get("in_partners") and d.get("current_partner_id"))
+
+
+class _FilterNotInPartners(BaseFilter):
+    """Вход в раздел Партнёры по кнопке меню — только когда ещё не внутри раздела."""
+
+    async def __call__(self, event: Message | CallbackQuery, **kwargs: object) -> bool:
+        if isinstance(event, CallbackQuery):
+            return True
+        state: FSMContext | None = kwargs.get("state") if kwargs else None
+        if not state:
+            return True
+        d = await state.get_data()
+        return not d.get("in_partners")
 
 
 def _clean_full_description(raw: Optional[str]) -> str:
@@ -352,7 +418,7 @@ async def show_next_profile(
             await message_or_callback.answer("Произошла ошибка. Попробуйте позже.", show_alert=True)
 
 
-@router.message(F.text.in_(text_options("menu_partners")))
+@router.message(F.text.in_(text_options("menu_partners")), _FilterNotInPartners())
 @router.callback_query(F.data == "dating")
 async def cmd_dating(event: Message | CallbackQuery, state: FSMContext) -> None:
     """Раздел Партнеры (язык ru/en)."""
@@ -437,7 +503,10 @@ def _partners_text_to_action(text: str) -> Optional[str]:
     return m.get(text)
 
 
-@router.message(F.text.in_([PARTNERS_BTN_LIKE, PARTNERS_BTN_BOOKMARK, PARTNERS_BTN_DISLIKE]))
+@router.message(
+    F.text.in_([PARTNERS_BTN_LIKE, PARTNERS_BTN_BOOKMARK, PARTNERS_BTN_DISLIKE]),
+    _FilterInPartners(),
+)
 async def handle_partners_reply_action(message: Message, state: FSMContext) -> None:
     """
     Обработка нажатий [🤝] [🏷] [👎] в разделе Партнеры.
@@ -464,21 +533,10 @@ async def handle_partners_reply_action(message: Message, state: FSMContext) -> N
                 swiper_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
                 # Уведомление о лайке не отправляем, если у лайкнувшего теневой или полный бан
                 if swiper_user and (swiper_user.ban_status or "none") in ("none",):
-                    try:
-                        swiper_name = swiper_user.name or "Пользователь"
-                        view_kb = InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text="👀 Посмотреть", callback_data=f"view_liker:{swiper_user_id}")]
-                        ])
-                        await message.bot.send_message(
-                            swiped_user_id,
-                            f"🤝 <b>Кто-то проявил интерес</b>\n\n"
-                            f"{swiper_name} отметил(а) вашу анкету.\n\n"
-                            f"Нажмите «Посмотреть», чтобы открыть анкету и ответить.",
-                            reply_markup=view_kb,
-                            parse_mode="HTML",
-                        )
-                    except Exception as e:
-                        logger.error("Ошибка при отправке уведомления о лайке (reply) chat_id=%s: %s", swiped_user_id, e, exc_info=True)
+                    swiper_name = swiper_user.name or "Пользователь"
+                    await _send_like_notification(
+                        message.bot, swiped_user_id, swiper_name, swiper_user_id
+                    )
 
                 mutual = await SwipeRepository.check_mutual_like(session, swiper_user_id, swiped_user_id)
                 if mutual:
@@ -900,22 +958,11 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
             if action == "like":
                 swiper_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
                 if swiper_user and (swiper_user.ban_status or "none") in ("none",):
-                    try:
-                        swiper_name = swiper_user.name or "Пользователь"
-                        view_kb = InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text="👀 Посмотреть", callback_data=f"view_liker:{swiper_user_id}")]
-                        ])
-                        await callback.bot.send_message(
-                            swiped_user_id,
-                            f"🤝 <b>Кто-то проявил интерес</b>\n\n"
-                            f"{swiper_name} отметил(а) вашу анкету.\n\n"
-                            f"Нажмите «Посмотреть», чтобы открыть анкету и ответить.",
-                            reply_markup=view_kb,
-                            parse_mode="HTML",
-                        )
-                    except Exception as e:
-                        logger.error("Ошибка при отправке уведомления о лайке chat_id=%s: %s", swiped_user_id, e, exc_info=True)
-                
+                    swiper_name = swiper_user.name or "Пользователь"
+                    await _send_like_notification(
+                        callback.bot, swiped_user_id, swiper_name, swiper_user_id
+                    )
+
                 # Проверяем совпадение (взаимный лайк) — пишем подробное сравнение в доп. файл
                 mutual = await SwipeRepository.check_mutual_like(
                     session, swiper_user_id, swiped_user_id

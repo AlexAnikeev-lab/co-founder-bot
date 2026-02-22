@@ -10,6 +10,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from config import Config
+from init_db import init_database
 from middlewares.auth import AuthMiddleware
 from middlewares.throttling import ThrottlingMiddleware
 from middlewares.delete_previous import BotDeletePrevious, DeletePreviousMiddleware
@@ -25,6 +26,13 @@ async def main() -> None:
     
     # Загрузка конфигурации
     config = Config()
+    
+    # Автоматическая инициализация БД при первом запуске (создаёт таблицы, если их нет)
+    try:
+        await init_database()
+    except Exception as e:
+        logger.error("Ошибка инициализации БД: %s", e, exc_info=True)
+        raise
     
     # Инициализация бота и диспетчера (BotDeletePrevious удаляет предыдущие сообщения при новой отправке)
     bot = BotDeletePrevious(
