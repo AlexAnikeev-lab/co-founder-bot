@@ -660,6 +660,122 @@ COMM_EXTRA_QUESTIONS = {
     }
 }
 
+# ========== ENGLISH TRANSLATIONS ==========
+
+MAIN_TEST_QUESTIONS_EN = {
+    1: {
+        "text": "What role do you usually take in a team project?",
+        "answers": {
+            "a": "Organize process and sales",
+            "b": "Build prototype and code",
+            "c": "Focus on design and ideas"
+        }
+    },
+    2: {
+        "text": "What do you most enjoy doing when launching your own project?",
+        "answers": {
+            "a": "Communicating and selling",
+            "b": "Developing the product",
+            "c": "Creating brand and style"
+        }
+    },
+    3: {
+        "text": "Imagine: your partner did something unethical for the company's benefit. How would you react?",
+        "answers": {
+            "a": "Against it, require honesty",
+            "b": "Discuss and decide calmly",
+            "c": "Result is all that matters"
+        }
+    },
+    4: {
+        "text": "What matters more when making a tough business decision?",
+        "answers": {
+            "a": "Principles and conscience",
+            "b": "Balance of benefit and ethics",
+            "c": "Success at any cost"
+        }
+    },
+    5: {
+        "text": "What motivates you most about launching a startup?",
+        "answers": {
+            "a": "Money and income",
+            "b": "Impact and idea",
+            "c": "Experience and growth",
+            "d": "Team and process"
+        }
+    },
+    6: {
+        "text": "How do you define your startup's success in 5 years?",
+        "answers": {
+            "a": "High profit",
+            "b": "Impact and benefit",
+            "c": "Strong team",
+            "d": "Steady growth"
+        }
+    },
+    7: {
+        "text": "If you get a chance to invest all resources in a risky project, you…",
+        "answers": {
+            "a": "Take the risk for growth",
+            "b": "Take the risk with preparation",
+            "c": "Decline the risk"
+        }
+    },
+    8: {
+        "text": "How do you usually approach important decisions?",
+        "answers": {
+            "a": "Quickly, by intuition",
+            "b": "Analyze for a long time",
+            "c": "Consult the team",
+            "d": "Ask an expert"
+        }
+    },
+    9: {
+        "text": "How do you prefer to tell your partner about a problem?",
+        "answers": {
+            "a": "Say it directly",
+            "b": "Say it carefully",
+            "c": "Avoid the conversation"
+        }
+    },
+    10: {
+        "text": "Do you consider yourself more of an extrovert or introvert?",
+        "answers": {
+            "a": "Extrovert, love communication",
+            "b": "Introvert, value solitude",
+            "c": "Ambivert, depends on mood"
+        }
+    }
+}
+
+QUESTIONS_EN = {
+    "main": MAIN_TEST_QUESTIONS_EN,
+    "roles_extra": None,  # Add EN when needed
+    "ethics_extra": None,
+    "goals_extra": None,
+    "risk_extra": None,
+    "decision_extra": None,
+    "comm_extra": None,
+}
+
+
+def get_question_and_answers_localized(
+    test_type: str, question_num: int, question_data: dict, lang: str
+) -> tuple[str, dict | None]:
+    """Return (localized_question_text, localized_answers_or_scale_labels or None).
+    When answers is None, handler uses original question_data answers/scale_labels.
+    """
+    if lang != "en":
+        return question_data["text"], None
+    en_data = QUESTIONS_EN.get(test_type)
+    if en_data and question_num in en_data:
+        q = en_data[question_num]
+        if q.get("scale"):
+            return q["text"], q.get("scale_labels", {})
+        return q["text"], q.get("answers", {})
+    return question_data["text"], None
+
+
 # ========== МАППИНГ ТЕСТОВ ==========
 
 TEST_TYPES = {

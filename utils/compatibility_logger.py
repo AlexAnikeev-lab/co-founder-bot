@@ -1,7 +1,9 @@
 """
 Запись расчёта совместимости в .txt при каждом показе анкеты с процентом совместимости.
+Запись в файл выполняется в потоке (run_in_executor), чтобы не блокировать event loop при нагрузке.
 """
 
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -34,6 +36,12 @@ def _format_details_for_txt(details: Dict[str, Any], indent: str = "  ") -> str:
     return "\n".join(lines) if lines else ""
 
 
+def _write_compatibility_log(content: str) -> None:
+    """Синхронная запись в файл (вызывается из executor)."""
+    with open(COMPATIBILITY_LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(content)
+
+
 def log_compatibility_calculation(
     viewer_telegram_id: int,
     shown_user_telegram_id: int,
@@ -58,39 +66,45 @@ def log_compatibility_calculation(
         final_score, details = CompatibilityService.calculate_compatibility_detailed(
             profile_viewer, profile_shown
         )
-        # Явно создаём файл в корне проекта
-        with open(COMPATIBILITY_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write("\n")
-            f.write("=" * 80 + "\n")
-            f.write(f"ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — {datetime.utcnow().isoformat()}Z\n")
-            f.write("=" * 80 + "\n")
-            f.write(f"Кому показывают (viewer): id={viewer_telegram_id}")
-            if viewer_name:
-                f.write(f", имя={viewer_name}")
-            f.write("\n")
-            f.write(f"Кого показывают (shown):   id={shown_user_telegram_id}")
-            if shown_name:
-                f.write(f", имя={shown_name}")
-            f.write("\n")
-            f.write(f"Итоговый процент совместимости: {final_score}%\n")
-            f.write("\n--- Профили (баллы) ---\n")
-            f.write("Profile viewer: " + str(details.get("profile_a", {})) + "\n")
-            f.write("Profile shown:   " + str(details.get("profile_b", {})) + "\n")
-            f.write("\n--- Как считался процент ---\n")
-            f.write("E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):\n")
-            e1 = details.get("E1_scores", {})
-            for k, v in e1.items():
-                f.write(f"  {k}: {v}\n")
-            f.write("E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):\n")
-            e2 = details.get("E2_roles", {})
-            for k, v in e2.items():
-                f.write(f"  {k}: {v}\n")
-            f.write(f"E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): {details.get('E3_base', '')}\n")
-            f.write(f"E4 — штрафы (red flags): {details.get('E4_penalty', 0)}\n")
-            for line in details.get("E4_penalty_details", []):
-                f.write(f"  - {line}\n")
-            f.write(f"E5 — итог (base - penalty): {details.get('E5_final', '')}%\n")
-            f.write("=" * 80 + "\n")
+        lines = [
+            "",
+            "=" * 80,
+            f"ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — {datetime.utcnow().isoformat()}Z",
+            "=" * 80,
+            f"Кому показывают (viewer): id={viewer_telegram_id}" + (f", имя={viewer_name}" if viewer_name else ""),
+            f"Кого показывают (shown):   id={shown_user_telegram_id}" + (f", имя={shown_name}" if shown_name else ""),
+            f"Итоговый процент совместимости: {final_score}%",
+            "",
+            "--- Профили (баллы) ---",
+            "Profile viewer: " + str(details.get("profile_a", {})),
+            "Profile shown:   " + str(details.get("profile_b", {})),
+            "",
+            "--- Как считался процент ---",
+            "E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):",
+        ]
+        e1 = details.get("E1_scores", {})
+        for k, v in e1.items():
+            lines.append(f"  {k}: {v}")
+        lines.extend([
+            "E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):",
+        ])
+        e2 = details.get("E2_roles", {})
+        for k, v in e2.items():
+            lines.append(f"  {k}: {v}")
+        lines.extend([
+            f"E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): {details.get('E3_base', '')}",
+            f"E4 — штрафы (red flags): {details.get('E4_penalty', 0)}",
+        ])
+        for line in details.get("E4_penalty_details", []):
+            lines.append(f"  - {line}")
+        lines.append(f"E5 — итог (base - penalty): {details.get('E5_final', '')}%")
+        lines.append("=" * 80)
+        content = "\n".join(lines) + "\n"
+        try:
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(None, _write_compatibility_log, content)
+        except RuntimeError:
+            _write_compatibility_log(content)
         logger.info("Запись расчёта совместимости в %s", COMPATIBILITY_LOG_FILE)
     except Exception as e:
         logger.error(
@@ -100,6 +114,12 @@ def log_compatibility_calculation(
             os.path.abspath(COMPATIBILITY_LOG_FILE),
             exc_info=True,
         )
+
+
+def _write_show_minimal_log(content: str) -> None:
+    """Синхронная запись в файл (вызывается из executor)."""
+    with open(COMPATIBILITY_LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(content)
 
 
 def log_compatibility_show_minimal(
@@ -113,16 +133,22 @@ def log_compatibility_show_minimal(
     Чтобы файл создавался при любом показе.
     """
     try:
-        with open(COMPATIBILITY_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write("\n")
-            f.write("=" * 80 + "\n")
-            f.write(f"ПОКАЗ АНКЕТЫ — {datetime.utcnow().isoformat()}Z\n")
-            f.write("=" * 80 + "\n")
-            f.write(f"Кому показывают (viewer): id={viewer_telegram_id}\n")
-            f.write(f"Кого показывают (shown):   id={shown_user_telegram_id}\n")
-            f.write(f"Показанный процент совместимости: {compatibility_percent}%\n")
-            f.write(f"Примечание: {reason}\n")
-            f.write("=" * 80 + "\n")
+        content = "\n".join([
+            "",
+            "=" * 80,
+            f"ПОКАЗ АНКЕТЫ — {datetime.utcnow().isoformat()}Z",
+            "=" * 80,
+            f"Кому показывают (viewer): id={viewer_telegram_id}",
+            f"Кого показывают (shown):   id={shown_user_telegram_id}",
+            f"Показанный процент совместимости: {compatibility_percent}%",
+            f"Примечание: {reason}",
+            "=" * 80,
+        ]) + "\n"
+        try:
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(None, _write_show_minimal_log, content)
+        except RuntimeError:
+            _write_show_minimal_log(content)
         logger.info("Запись показа анкеты (краткая) в %s", COMPATIBILITY_LOG_FILE)
     except Exception as e:
         logger.error(

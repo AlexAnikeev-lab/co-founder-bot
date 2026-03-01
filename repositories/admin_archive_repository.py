@@ -2,7 +2,7 @@
 Архив данных пользователей для админов. Заполняется при регистрации, ничего не удаляется.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from repositories.database import Base
@@ -72,6 +72,24 @@ class AdminArchiveRepository:
         """Общее количество записей в архиве."""
         r = await session.execute(select(func.count(AdminUserArchive.id)))
         return r.scalar() or 0
+
+    @staticmethod
+    async def get_by_telegram_ids_sorted(
+        session: AsyncSession,
+        telegram_ids: Sequence[int],
+    ) -> List[AdminUserArchive]:
+        """
+        Получить все записи архива по списку telegram_id, отсортированные по archived_at DESC.
+        Используется для фильтрации (например, премиум-пользователи с мэтчами).
+        """
+        if not telegram_ids:
+            return []
+        result = await session.execute(
+            select(AdminUserArchive)
+            .where(AdminUserArchive.telegram_id.in_(telegram_ids))
+            .order_by(AdminUserArchive.archived_at.desc())
+        )
+        return list(result.scalars().all())
 
     @staticmethod
     async def get_by_id(session: AsyncSession, archive_id: int) -> Optional[AdminUserArchive]:

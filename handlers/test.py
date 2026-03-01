@@ -26,6 +26,26 @@ from services.compatibility_service import CompatibilityService
 logger = logging.getLogger(__name__)
 router = Router()
 
+_TEST_I18N_KEYS = {
+    "main": ("test_main_name", "test_main_desc"),
+    "roles_extra": ("test_roles_name", "test_roles_desc"),
+    "ethics_extra": ("test_ethics_name", "test_ethics_desc"),
+    "goals_extra": ("test_goals_name", "test_goals_desc"),
+    "risk_extra": ("test_risk_name", "test_risk_desc"),
+    "decision_extra": ("test_decision_name", "test_decision_desc"),
+    "comm_extra": ("test_comm_name", "test_comm_desc"),
+}
+
+
+def _get_test_name(test_type: str, lang: str) -> str:
+    keys = _TEST_I18N_KEYS.get(test_type, ("test_main_name", "test_main_desc"))
+    return t(lang, keys[0])
+
+
+def _get_test_description(test_type: str, lang: str) -> str:
+    keys = _TEST_I18N_KEYS.get(test_type, ("test_main_name", "test_main_desc"))
+    return t(lang, keys[1])
+
 
 async def _get_tests_list_text_and_keyboard(user_id: int):
     """Текст и клавиатура списка тестов (язык из пользователя). Возвращает (text, keyboard) или (None, None)."""
@@ -56,7 +76,9 @@ async def show_tests_list_from_message(message: Message, state: FSMContext) -> N
         user_id = message.from_user.id if message.from_user else 0
         text, kb = await _get_tests_list_text_and_keyboard(user_id)
         if text is None:
-            await message.answer(t("ru", "not_registered_use_start"))
+            data = await state.get_data()
+            _lang = data.get("language", "ru")
+            await message.answer(t(_lang, "not_registered_use_start"))
             return
         sent = await message.answer(text, reply_markup=kb)
         await state.update_data(last_bot_message_id=sent.message_id)
@@ -67,15 +89,26 @@ async def show_tests_list_from_message(message: Message, state: FSMContext) -> N
 
 @router.callback_query(F.data == "tests")
 async def show_tests_list(callback: CallbackQuery, state: FSMContext) -> None:
-    """Показать список тестов"""
+    """Показать список тестов. Удаляем сообщение «Выберите раздел» при переходе из профиля."""
     try:
         await callback.answer()
+        data = await state.get_data()
+        section_mid = data.get("profile_section_message_id")
+        chat_id = callback.message.chat.id
+        bot = callback.bot
         await state.clear()
+
+        if section_mid:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=section_mid)
+            except Exception:
+                pass
 
         text, kb = await _get_tests_list_text_and_keyboard(callback.from_user.id)
 
         if text is None:
-            err = t("ru", "not_registered_use_start")
+            _lang = await _get_user_lang(callback.from_user.id)
+            err = t(_lang, "not_registered_use_start")
             try:
                 await callback.message.edit_text(err)
             except Exception:
@@ -119,19 +152,7 @@ async def about_tests(callback: CallbackQuery) -> None:
             test_result = await TestResultRepository.get_by_user_id(session, callback.from_user.id)
             main_test_completed = test_result.main_test_completed if test_result else False
             break
-        text = (
-            "ℹ️ <b>О тестах</b>\n\n"
-            "Тесты помогут тебе лучше понять себя, свои сильные стороны и предпочтения.\n\n"
-            "<b>Основной тест</b> (10 вопросов) — обязательный тест, который оценивает все критерии совместимости.\n\n"
-            "<b>Дополнительные тесты</b> (по 10 вопросов каждый) — для более глубокого анализа:\n"
-            "• Ролевые предпочтения (Hustler/Hacker/Hipster)\n"
-            "• Ценности и этика\n"
-            "• Цели и мотивация\n"
-            "• Толерантность к риску\n"
-            "• Стиль принятия решений\n"
-            "• Стиль коммуникации\n\n"
-            "Результаты тестов используются для подбора совместимых партнёров."
-        )
+        text = t(lang, "tests_about_title") + "\n\n" + t(lang, "tests_about_text")
         # Всегда пытаемся редактировать сообщение
         try:
             await callback.message.edit_text(
@@ -161,15 +182,17 @@ async def show_test_info(callback: CallbackQuery, state: FSMContext) -> None:
         test_type = callback.data.split(":")[1]
 
         if test_type not in TEST_TYPES:
-            await callback.answer("❌ Тест не найден", show_alert=True)
+            await callback.answer(t(lang, "test_not_found"), show_alert=True)
             return
 
         test_info = TEST_TYPES[test_type]
+        name = _get_test_name(test_type, lang)
+        desc = _get_test_description(test_type, lang)
         text = (
-            f"📋 <b>{test_info['name']}</b>\n\n"
-            f"{test_info['description']}\n\n"
-            f"Количество вопросов: {test_info['total_questions']}\n\n"
-            "Готов начать?"
+            f"📋 <b>{name}</b>\n\n"
+            f"{desc}\n\n"
+            f"{t(lang, 'test_info_questions_count')} {test_info['total_questions']}\n\n"
+            f"{t(lang, 'test_info_ready')}"
         )
         try:
             await callback.message.edit_text(
@@ -198,9 +221,11 @@ async def start_test(callback: CallbackQuery, state: FSMContext) -> None:
         test_type = callback.data.split(":")[1]
         
         if test_type not in TEST_TYPES:
-            await callback.answer("❌ Тест не найден", show_alert=True)
+            lang = await _get_user_lang(callback.from_user.id)
+            await callback.answer(t(lang, "test_not_found"), show_alert=True)
             return
-        
+
+        lang = await _get_user_lang(callback.from_user.id)
         # Проверяем, не пройден ли уже тест (основной тест перепройти нельзя)
         async for session in get_session():
             test_result = await TestResultRepository.get_by_user_id(
@@ -211,12 +236,12 @@ async def start_test(callback: CallbackQuery, state: FSMContext) -> None:
             if test_result and getattr(test_result, completed_field, False):
                 if test_type == "main":
                     await callback.answer(
-                        "Основной тест уже пройден. Перепройти его нельзя.",
+                        t(lang, "test_main_already_completed"),
                         show_alert=True
                     )
                     return
                 await callback.answer(
-                    "ℹ️ Этот тест уже пройден. Пройди его снова для обновления результатов.",
+                    t(lang, "test_already_completed"),
                     show_alert=True
                 )
                 return
@@ -252,30 +277,34 @@ async def show_question(
         questions = test_info["questions"]
         
         if question_num not in questions:
-            await callback.answer("❌ Вопрос не найден", show_alert=True)
+            lang = await _get_user_lang(callback.from_user.id)
+            await callback.answer(t(lang, "test_question_not_found"), show_alert=True)
             return
         
         question_data = questions[question_num]
-        question_text = question_data["text"]
         is_scale = question_data.get("scale", False)
-        
-        if is_scale:
-            # Вопрос со шкалой 1-5
+        total_questions = test_info["total_questions"]
+        lang = await _get_user_lang(callback.from_user.id)
+
+        from texts.test_questions import get_question_and_answers_localized
+        q_text, answers_loc = get_question_and_answers_localized(test_type, question_num, question_data, lang)
+        if answers_loc is not None:
+            answers = answers_loc
+        elif is_scale:
             scale_labels = question_data.get("scale_labels", {})
             answers = {str(i): scale_labels.get(str(i), str(i)) for i in range(1, 6)}
+        else:
+            answers = question_data["answers"]
+
+        if is_scale:
             await state.set_state(TestStates.answering_scale)
         else:
-            # Обычный вопрос с вариантами ответов
-            answers = question_data["answers"]
             await state.set_state(TestStates.answering_question)
-        
-        total_questions = test_info["total_questions"]
-        text = (
-            f"❓ <b>Вопрос {question_num} из {total_questions}</b>\n\n"
-            f"{question_text}"
+
+        text = t(lang, "test_question_format").format(
+            num=question_num, total=total_questions, text=q_text
         )
-        
-        lang = await _get_user_lang(callback.from_user.id)
+
         try:
             await callback.message.edit_text(
                 text,
@@ -404,16 +433,13 @@ async def finish_test(
                 await calculate_and_save_profile(callback.from_user.id)
             break
         
-        # Показываем результаты
-        text = (
-            f"✅ <b>Тест завершён!</b>\n\n"
-            f"Спасибо за прохождение теста. "
-            f"Твои ответы сохранены и будут использованы для подбора совместимых партнёров."
-        )
-        
-        if test_type == "main":
-            text += "\n\n📊 Твой профиль рассчитан и сохранён."
         lang = await _get_user_lang(callback.from_user.id)
+        text = (
+            f"{t(lang, 'test_completed_title')}\n\n"
+            f"{t(lang, 'test_completed_thanks')}"
+        )
+        if test_type == "main":
+            text += f"\n\n{t(lang, 'test_completed_profile_saved')}"
         try:
             await callback.message.edit_text(
                 text,

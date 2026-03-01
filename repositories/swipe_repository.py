@@ -5,9 +5,10 @@
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, UniqueConstraint, delete, func
+from sqlalchemy.orm import aliased
 from repositories.database import Base
 from sqlalchemy.orm import Mapped, mapped_column
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class Swipe(Base):
@@ -76,6 +77,25 @@ class SwipeRepository:
         )
         return result.scalar_one_or_none()
     
+    @staticmethod
+    async def count_in_last_7_days(
+        session: AsyncSession,
+        swiper_id: int,
+        action: str,
+    ) -> int:
+        """Количество свайпов с действием action за последние 7 дней (по created_at)."""
+        since = datetime.utcnow() - timedelta(days=7)
+        result = await session.execute(
+            select(func.count(Swipe.id)).where(
+                and_(
+                    Swipe.swiper_id == swiper_id,
+                    Swipe.action == action,
+                    Swipe.created_at >= since,
+                )
+            )
+        )
+        return result.scalar() or 0
+
     @staticmethod
     async def get_swiped_user_ids(
         session: AsyncSession,
@@ -156,6 +176,66 @@ class SwipeRepository:
                     Swipe.action == "like",
                     Swipe.swiper_id.in_(my_liked_ids)
                 )
+            )
+        )
+        return [row[0] for row in result.fetchall()]
+
+    @staticmethod
+    async def get_swipe_stats_for_user(
+        session: AsyncSession,
+        user_id: int,
+    ) -> dict:
+        """
+        Статистика свайпов для одного пользователя:
+        likes_given, likes_received, dislikes_given, matches (list of (telegram_id, name)).
+        """
+        # Лайки, которые поставил
+        r1 = await session.execute(
+            select(func.count(Swipe.id)).where(
+                and_(Swipe.swiper_id == user_id, Swipe.action == "like")
+            )
+        )
+        likes_given = r1.scalar() or 0
+        # Лайки, полученные
+        r2 = await session.execute(
+            select(func.count(Swipe.id)).where(
+                and_(Swipe.swiped_id == user_id, Swipe.action == "like")
+            )
+        )
+        likes_received = r2.scalar() or 0
+        # Дизлайки, которые поставил
+        r3 = await session.execute(
+            select(func.count(Swipe.id)).where(
+                and_(Swipe.swiper_id == user_id, Swipe.action == "dislike")
+            )
+        )
+        dislikes_given = r3.scalar() or 0
+        # Мэтчи (с кем)
+        match_ids = await SwipeRepository.get_mutual_matches(session, user_id)
+        return {
+            "likes_given": likes_given,
+            "likes_received": likes_received,
+            "dislikes_given": dislikes_given,
+            "match_ids": match_ids,
+        }
+
+    @staticmethod
+    async def get_users_with_mutual_matches(session: AsyncSession) -> list[int]:
+        """
+        Список telegram_id пользователей, у которых есть хотя бы одно совпадение (взаимный лайк).
+        Используется в админ-панели для фильтрации.
+        """
+        s1 = aliased(Swipe)
+        s2 = aliased(Swipe)
+        result = await session.execute(
+            select(func.distinct(s1.swiper_id)).join(
+                s2,
+                and_(
+                    s1.swiper_id == s2.swiped_id,
+                    s1.swiped_id == s2.swiper_id,
+                    s1.action == "like",
+                    s2.action == "like",
+                ),
             )
         )
         return [row[0] for row in result.fetchall()]

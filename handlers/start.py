@@ -49,7 +49,13 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     except Exception as e:
         logger.error(f"Ошибка в cmd_start: {e}", exc_info=True)
         await handle_error(None, e, "cmd_start")
-        await message.answer("❌ Произошла ошибка. Попробуй ещё раз.")
+        lang = "ru"
+        async for s in get_session():
+            u = await UserRepository.get_by_telegram_id(s, message.from_user.id)
+            if u:
+                lang = getattr(u, "language", None) or "ru"
+            break
+        await message.answer("❌ " + t(lang, "error_try_later"))
 
 
 @router.callback_query(F.data == "welcome_gas")
@@ -62,8 +68,8 @@ async def welcome_gas(callback: CallbackQuery, state: FSMContext) -> None:
         data = await state.get_data()
         lang = data.get("language", "ru")
         welcome2_text = t(lang, "welcome_2")
-        photo = get_registration_photo_file_id("welcome_2") or (
-            FSInputFile(p) if (p := get_registration_photo_path("welcome_2")) else None
+        photo = get_registration_photo_file_id("welcome_2", lang=lang) or (
+            FSInputFile(p) if (p := get_registration_photo_path("welcome_2", lang=lang)) else None
         )
         if photo:
             try:
@@ -86,7 +92,9 @@ async def welcome_gas(callback: CallbackQuery, state: FSMContext) -> None:
         logger.error(f"Ошибка в welcome_gas: {e}", exc_info=True)
         await handle_error(None, e, "welcome_gas")
         if callback.message:
-            await callback.message.answer("❌ Произошла ошибка. Попробуй ещё раз.")
+            data = await state.get_data()
+            lang = data.get("language", "ru")
+            await callback.message.answer("❌ " + t(lang, "error_try_later"))
 
 
 @router.callback_query(F.data == "start_registration")
@@ -100,7 +108,9 @@ async def start_registration(callback: CallbackQuery, state: FSMContext) -> None
         logger.error(f"Ошибка в start_registration: {e}", exc_info=True)
         await handle_error(None, e, "start_registration")
         if callback.message:
-            await callback.message.answer("❌ Произошла ошибка. Попробуй ещё раз.")
+            data = await state.get_data()
+            lang = data.get("language", "ru")
+            await callback.message.answer("❌ " + t(lang, "error_try_later"))
 
 
 def register_handlers(dp) -> None:

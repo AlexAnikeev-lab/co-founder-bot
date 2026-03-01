@@ -22,6 +22,7 @@ from utils.validators import (
     validate_short_description,
     validate_full_description,
     validate_single_quality,
+    text_contains_emoji,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,10 +67,11 @@ async def send_profile_view(
             profile_text += f"<b>{t(lang, 'profile_about')}:</b>\n"
             profile_text += f"<blockquote>{html.escape(user.short_description)}</blockquote>\n\n"
         if user.qualities:
-            qualities_list = user.qualities.split(",")
+            qualities_list = _get_qualities_list(user.qualities)
             profile_text += f"<b>{t(lang, 'profile_qualities')}:</b>\n"
             for q in qualities_list:
-                profile_text += f"• {q.strip()}\n"
+                if q:
+                    profile_text += f"{q}\n"
             profile_text += "\n"
         if user.full_description:
             profile_text += f"<b>{t(lang, 'profile_more')}:</b>\n"
@@ -166,7 +168,8 @@ async def show_profile(event, state: FSMContext) -> None:
             user = await UserRepository.get_by_telegram_id(session, user_id)
 
             if not user or not user.is_registered:
-                await message.answer(t("ru", "not_registered_use_start"))
+                _lang = (getattr(user, "language", None) or "ru") if user else "ru"
+                await message.answer(t(_lang, "not_registered_use_start"))
                 return
 
             data = await state.get_data()
@@ -188,14 +191,26 @@ async def show_profile(event, state: FSMContext) -> None:
                 profile_text += f"<b>{t(lang, 'profile_about')}:</b>\n"
                 profile_text += f"<blockquote>{html.escape(user.short_description)}</blockquote>\n\n"
             if user.qualities:
-                qualities_list = user.qualities.split(",")
+                qualities_list = _get_qualities_list(user.qualities)
                 profile_text += f"<b>{t(lang, 'profile_qualities')}:</b>\n"
-                for quality in qualities_list:
-                    profile_text += f"• {quality.strip()}\n"
+                for q in qualities_list:
+                    if q:
+                        profile_text += f"{q}\n"
                 profile_text += "\n"
             if user.full_description:
                 profile_text += f"<b>{t(lang, 'profile_more')}:</b>\n"
                 profile_text += f"<blockquote>{html.escape(user.full_description)}</blockquote>"
+
+            # При переходе в профиль удаляем предыдущее меню (Главное меню, «Выберите раздел» или сообщение с inline-кнопками)
+            data = await state.get_data()
+            ids_to_del = [data.get("last_bot_message_id"), data.get("profile_section_message_id"), message.message_id]
+            for mid in ids_to_del:
+                if mid:
+                    try:
+                        await message.bot.delete_message(chat_id=message.chat.id, message_id=mid)
+                    except Exception:
+                        pass
+            await state.update_data(profile_section_message_id=None)
 
             if user.photo_id:
                 msg = await message.answer_photo(
@@ -209,7 +224,8 @@ async def show_profile(event, state: FSMContext) -> None:
                     reply_markup=get_profile_keyboard(user.is_minor, lang),
                 )
             await state.update_data(last_bot_message_id=msg.message_id)
-            await message.answer(t(lang, "choose_section"), reply_markup=get_profile_reply_keyboard(user.is_minor, lang))
+            sec_msg = await message.answer(t(lang, "choose_section"), reply_markup=get_profile_reply_keyboard(user.is_minor, lang))
+            await state.update_data(profile_section_message_id=sec_msg.message_id)
             break
 
     except Exception as e:
@@ -219,19 +235,30 @@ async def show_profile(event, state: FSMContext) -> None:
 
 @router.message(F.text.in_(text_options("profile_people")))
 async def profile_reply_people(message: Message, state: FSMContext) -> None:
-    """Раздел Люди по кнопке из меню профиля."""
+    """Раздел Люди по кнопке из меню профиля. Удаляем «Выберите раздел» и сообщение профиля."""
     try:
         await message.delete()
     except Exception:
         pass
-    await state.update_data(profile_screen="people")
+    data = await state.get_data()
+    chat_id = message.chat.id
+    bot = message.bot
+    for mid in (data.get("last_bot_message_id"), data.get("profile_section_message_id")):
+        if mid:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=mid)
+            except Exception:
+                pass
+    await state.update_data(profile_section_message_id=None, profile_screen="people")
     from keyboards.menu import get_people_keyboard
-    text = (
-        "👥 <b>Люди</b>\n\n"
-        "Здесь ты можешь искать единомышленников, "
-        "смотреть избранных и совпадения."
-    )
-    sent = await message.answer(text, reply_markup=get_people_keyboard())
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, message.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
+    text = t(lang, "people_title") + "\n\n" + t(lang, "people_intro")
+    sent = await message.answer(text, reply_markup=get_people_keyboard(lang))
     await state.update_data(last_bot_message_id=sent.message_id)
 
 
@@ -295,25 +322,35 @@ async def delete_profile_yes(callback: CallbackQuery) -> None:
         async for session in get_session():
             user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
             if user:
+                lang = getattr(user, "language", None) or "ru"
                 user_id = callback.from_user.id
                 await TestResultRepository.delete_by_user_id(session, user_id)
                 await UserRepository.delete(session, user)
+                txt = t(lang, "profile_deleted")
                 try:
-                    await callback.message.edit_text("✅ Профиль удалён. Используй /start для новой регистрации.")
+                    await callback.message.edit_text(txt)
                 except Exception:
-                    await callback.message.answer("✅ Профиль удалён. Используй /start для новой регистрации.")
+                    await callback.message.answer(txt)
             else:
+                lang = "ru"
                 try:
-                    await callback.message.edit_text("❌ Профиль не найден.")
+                    await callback.message.edit_text(t("ru", "profile_not_found"))
                 except Exception:
-                    await callback.message.answer("❌ Профиль не найден.")
+                    await callback.message.answer(t("ru", "profile_not_found"))
             break
     except Exception as e:
         logger.error(f"Ошибка в delete_profile_yes: {e}", exc_info=True)
+        _err_lang = "ru"
+        async for s in get_session():
+            u = await UserRepository.get_by_telegram_id(s, callback.from_user.id)
+            if u:
+                _err_lang = getattr(u, "language", None) or "ru"
+            break
+        txt = t(_err_lang, "profile_delete_error")
         try:
-            await callback.message.edit_text("❌ Ошибка при удалении профиля.")
+            await callback.message.edit_text(txt)
         except Exception:
-            await callback.message.answer("❌ Ошибка при удалении профиля.")
+            await callback.message.answer(txt)
 
 
 @router.callback_query(F.data == "delete_profile_cancel")
@@ -324,27 +361,35 @@ async def delete_profile_no(callback: CallbackQuery) -> None:
         user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
         if user:
             lang = getattr(user, "language", None) or "ru"
+            txt = t(lang, "cancel_profile_saved")
             try:
-                await callback.message.edit_text("Отмена. Профиль сохранён.", reply_markup=get_profile_keyboard(user.is_minor, lang))
+                await callback.message.edit_text(txt, reply_markup=get_profile_keyboard(user.is_minor, lang))
             except Exception:
-                await callback.message.answer("Отмена. Профиль сохранён.", reply_markup=get_profile_keyboard(user.is_minor, lang))
+                await callback.message.answer(txt, reply_markup=get_profile_keyboard(user.is_minor, lang))
         else:
+            txt = t("ru", "profile_not_found")
             try:
-                await callback.message.edit_text("❌ Профиль не найден.")
+                await callback.message.edit_text(txt)
             except Exception:
-                await callback.message.answer("❌ Профиль не найден.")
+                await callback.message.answer(txt)
         break
 
 
 @router.callback_query(F.data == "profile_change_language")
 async def profile_change_language(callback: CallbackQuery, state: FSMContext) -> None:
-    """Показать выбор языка в профиле."""
+    """Показать выбор языка в профиле (текст и кнопки на текущем языке)."""
     await callback.answer()
-    text = t("ru", "language_question")
+    lang = "ru"
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+        break
+    text = t(lang, "language_question")
     try:
-        await callback.message.edit_text(text, reply_markup=get_profile_language_keyboard())
+        await callback.message.edit_text(text, reply_markup=get_profile_language_keyboard(lang))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_profile_language_keyboard())
+        await callback.message.answer(text, reply_markup=get_profile_language_keyboard(lang))
 
 
 @router.callback_query(F.data.in_({"profile_set_lang_ru", "profile_set_lang_en"}))
@@ -368,21 +413,29 @@ async def profile_set_language(callback: CallbackQuery, state: FSMContext) -> No
 
 @router.callback_query(F.data == "people")
 async def show_people(callback: CallbackQuery, state: FSMContext) -> None:
-    """Раздел Люди - подменю с поиском, избранными и совпадениями"""
+    """Раздел Люди — подменю. Удаляем сообщение «Выберите раздел»."""
     await callback.answer()
     await state.update_data(profile_screen="people")
     from keyboards.menu import get_people_keyboard
-    
-    text = (
-        "👥 <b>Люди</b>\n\n"
-        "Здесь ты можешь искать единомышленников, "
-        "смотреть избранных и совпадения."
-    )
-    
+    data = await state.get_data()
+    section_mid = data.get("profile_section_message_id")
+    if section_mid:
+        try:
+            await callback.bot.delete_message(chat_id=callback.message.chat.id, message_id=section_mid)
+        except Exception:
+            pass
+        await state.update_data(profile_section_message_id=None)
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, callback.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
+    text = t(lang, "people_title") + "\n\n" + t(lang, "people_intro")
     try:
         await callback.message.edit_text(
             text,
-            reply_markup=get_people_keyboard()
+            reply_markup=get_people_keyboard(lang)
         )
         await state.update_data(last_bot_message_id=callback.message.message_id)
     except Exception:
@@ -392,7 +445,7 @@ async def show_people(callback: CallbackQuery, state: FSMContext) -> None:
             pass
         sent = await callback.message.answer(
             text,
-            reply_markup=get_people_keyboard()
+            reply_markup=get_people_keyboard(lang)
         )
         await state.update_data(last_bot_message_id=sent.message_id)
 
@@ -403,16 +456,19 @@ async def search_people(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     await state.update_data(profile_screen="search")
     from keyboards.menu import get_people_keyboard
-    
-    text = (
-        "🔍 <b>Поиск людей</b>\n\n"
-        "Функция в разработке."
-    )
-    
+
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, callback.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
+    text = t(lang, "people_search") + "\n\n" + t(lang, "people_search_coming_soon")
+
     try:
         await callback.message.edit_text(
             text,
-            reply_markup=get_people_keyboard()
+            reply_markup=get_people_keyboard(lang)
         )
         await state.update_data(last_bot_message_id=callback.message.message_id)
     except Exception:
@@ -422,7 +478,7 @@ async def search_people(callback: CallbackQuery, state: FSMContext) -> None:
             pass
         sent = await callback.message.answer(
             text,
-            reply_markup=get_people_keyboard()
+            reply_markup=get_people_keyboard(lang)
         )
         await state.update_data(last_bot_message_id=sent.message_id)
 
@@ -458,7 +514,7 @@ async def _show_favorite_at_index(
             pl = _get_user_profile(tr_shown, include_label=True)
             if pv and pl:
                 compatibility, _ = CompatibilityService.calculate_compatibility_detailed(pv, pl)
-        profile_text = format_user_profile(user, compatibility, expanded=False)
+        profile_text = format_user_profile(user, compatibility, expanded=False, lang=lang)
         total = len(favorites_ids)
         kb = get_favorites_keyboard(uid, index, total, expanded=False, lang=lang)
         new_id = msg.message_id
@@ -530,10 +586,7 @@ async def show_favorites(callback: CallbackQuery, state: FSMContext) -> None:
         async for session in get_session():
             favorites_ids = await SwipeRepository.get_bookmarked_user_ids(session, user_id)
             if not favorites_ids:
-                text = (
-                    "⭐ <b>Избранные</b>\n\n"
-                    "Здесь будут люди, которых ты добавил в избранное (кнопка 🏷 в поиске партнёров)."
-                )
+                text = t(lang, "people_favorites") + "\n\n" + t(lang, "favorites_empty_text")
                 try:
                     await callback.message.edit_text(text, reply_markup=get_people_keyboard(lang))
                 except Exception:
@@ -551,7 +604,7 @@ async def show_favorites(callback: CallbackQuery, state: FSMContext) -> None:
             user = await UserRepository.get_by_telegram_id(session, uid)
             if not user:
                 await callback.message.edit_text(
-                    "⭐ <b>Избранные</b>\n\nНе удалось загрузить анкету.",
+                    t(lang, "people_favorites") + "\n\n" + t(lang, "favorites_load_error"),
                     reply_markup=get_people_keyboard(lang),
                 )
                 return
@@ -565,7 +618,7 @@ async def show_favorites(callback: CallbackQuery, state: FSMContext) -> None:
                 pl = _get_user_profile(tr_shown, include_label=True)
                 if pv and pl:
                     compatibility, _ = CompatibilityService.calculate_compatibility_detailed(pv, pl)
-            profile_text = format_user_profile(user, compatibility, expanded=False)
+            profile_text = format_user_profile(user, compatibility, expanded=False, lang=lang)
             total = len(favorites_ids)
             kb = get_favorites_keyboard(uid, 0, total, expanded=False, lang=lang)
             try:
@@ -585,9 +638,15 @@ async def show_favorites(callback: CallbackQuery, state: FSMContext) -> None:
             break
     except Exception as e:
         logger.error("Ошибка загрузки избранного: %s", e, exc_info=True)
+        _lang = "ru"
+        async for s in get_session():
+            u = await UserRepository.get_by_telegram_id(s, user_id)
+            if u:
+                _lang = getattr(u, "language", None) or "ru"
+            break
         await callback.message.edit_text(
-            "⭐ <b>Избранные</b>\n\nНе удалось загрузить список. Попробуйте позже.",
-            reply_markup=get_people_keyboard(lang),
+            t(_lang, "people_favorites") + "\n\n" + t(_lang, "favorites_load_list_error"),
+            reply_markup=get_people_keyboard(_lang),
         )
 
 
@@ -677,7 +736,7 @@ async def handle_expand_collapse_favorites(callback: CallbackQuery, state: FSMCo
                         compatibility, details
                     )
         profile_text = format_user_profile(
-            user, compatibility, expanded=is_expand, compatibility_explanation=compatibility_explanation
+            user, compatibility, expanded=is_expand, compatibility_explanation=compatibility_explanation, lang=lang
         )
         total = len(favorites_ids)
         kb = get_favorites_keyboard(swiped_user_id, index, total, expanded=is_expand, lang=lang)
@@ -708,24 +767,22 @@ async def show_matches(callback: CallbackQuery, state: FSMContext) -> None:
         async for session in get_session():
             match_ids = await SwipeRepository.get_mutual_matches(session, user_id)
             if not match_ids:
-                text = (
-                    "🤝 <b>Совпадения</b>\n\n"
-                    "Здесь будут люди, с которыми у тебя взаимный интерес.\n\n"
-                    "Пока ни с кем нет совпадений. Лайкайте анкеты в разделе «🤝 Партнёры» — когда кто-то ответит лайком, вы оба появятся здесь."
-                )
+                text = t(lang, "people_matches") + "\n\n" + t(lang, "matches_empty_text") + "\n\n" + t(lang, "matches_empty_hint")
                 builder.adjust(1)
                 break
             # Загружаем пользователей по id
-            lines = ["🤝 <b>Совпадения</b>\n\nЛюди, с которыми у вас взаимный интерес:\n"]
+            _u = await UserRepository.get_by_telegram_id(session, user_id)
+            lang = (getattr(_u, "language", None) or "ru") if _u else "ru"
+            lines = [t(lang, "people_matches") + "\n\n" + t(lang, "matches_list_title") + "\n"]
             for mid in match_ids:
                 u = await UserRepository.get_by_telegram_id(session, mid)
                 if u:
-                    name = u.name or "Пользователь"
+                    name = u.name or t(lang, "card_user_fallback")
                     lines.append(f"• {name}")
                     uname = (u.username or "").strip().lstrip("@")
                     url = f"https://t.me/{uname}" if uname else f"tg://user?id={u.telegram_id}"
                     builder.add(
-                        InlineKeyboardButton(text=f"💬 {name} — в ЛС", url=url)
+                        InlineKeyboardButton(text=t(lang, "matches_btn_dm").format(name=name), url=url)
                     )
             builder.adjust(1)
             text = "\n".join(lines)
@@ -733,7 +790,13 @@ async def show_matches(callback: CallbackQuery, state: FSMContext) -> None:
     except Exception as e:
         import logging
         logging.getLogger(__name__).error("Ошибка загрузки совпадений: %s", e, exc_info=True)
-        text = "Не удалось загрузить список. Попробуйте позже."
+        _lang = "ru"
+        async for _s in get_session():
+            _u = await UserRepository.get_by_telegram_id(_s, user_id)
+            if _u:
+                _lang = getattr(_u, "language", None) or "ru"
+            break
+        text = t(_lang, "favorites_load_list_error")
         builder.adjust(1)
 
     try:
@@ -761,17 +824,20 @@ async def start_edit_name(callback: CallbackQuery, state: FSMContext) -> None:
     """Начало редактирования имени"""
     await callback.answer()
     from keyboards.common import get_cancel_button
-    from texts.messages import EDIT_CURRENT_COPYABLE
-    text = "✏️ <b>Изменение имени</b>\n\nВведи новое имя:"
+    lang = "ru"
+    text = t(lang, "edit_name_title")
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
-        if user and user.name:
-            text += f"\n\n{EDIT_CURRENT_COPYABLE}\n<code>{html.escape(user.name)}</code>"
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+            text = t(lang, "edit_name_title")
+            if user.name:
+                text += f"\n\n{t(lang, 'edit_current_copyable')}\n<code>{html.escape(user.name)}</code>"
         break
     try:
-        await callback.message.edit_text(text, reply_markup=get_cancel_button())
+        await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_cancel_button())
+        await callback.message.answer(text, reply_markup=get_cancel_button(lang))
     await state.set_state(ProfileEditStates.editing_name)
     await state.update_data(last_bot_message_id=callback.message.message_id)
 
@@ -787,13 +853,20 @@ async def process_edit_name(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     last_msg_id = data.get("last_bot_message_id")
     
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, message.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
     if not validate_name(message.text):
         if last_msg_id:
             try:
+                err_text = t(lang, "edit_name_error") + "\n\n" + t(lang, "edit_name_title")
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
-                    text="❌ Имя: от 2 до 50 символов, только буквы.\n\n✏️ <b>Изменение имени</b>\n\nВведи новое имя:",
+                    text=err_text,
                     reply_markup=None
                 )
             except Exception:
@@ -814,17 +887,22 @@ async def start_edit_photo(callback: CallbackQuery, state: FSMContext) -> None:
     """Начало редактирования фото"""
     await callback.answer()
     from keyboards.common import get_cancel_button
+    lang = "ru"
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+        break
+    text = t(lang, "edit_photo_title") + "\n\n" + t(lang, "edit_photo_request")
     try:
         await callback.message.edit_text(
-            "📸 <b>Изменение фото</b>\n\n"
-            "Отправь новое фото:",
-            reply_markup=get_cancel_button()
+            text,
+            reply_markup=get_cancel_button(lang)
         )
     except Exception:
         await callback.message.answer(
-            "📸 <b>Изменение фото</b>\n\n"
-            "Отправь новое фото:",
-            reply_markup=get_cancel_button()
+            text,
+            reply_markup=get_cancel_button(lang)
         )
     await state.set_state(ProfileEditStates.editing_photo)
     await state.update_data(last_bot_message_id=callback.message.message_id)
@@ -856,17 +934,22 @@ async def start_edit_short_description(callback: CallbackQuery, state: FSMContex
     """Начало редактирования краткого описания"""
     await callback.answer()
     from keyboards.common import get_cancel_button
-    from texts.messages import SHORT_DESCRIPTION_REQUEST, EDIT_CURRENT_COPYABLE
-    text = SHORT_DESCRIPTION_REQUEST
+    lang = "ru"
+    text = ""
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
-        if user and user.short_description:
-            text += f"\n\n{EDIT_CURRENT_COPYABLE}\n<code>{html.escape(user.short_description)}</code>"
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+            text = t(lang, "short_description_request")
+            if user.short_description:
+                text += f"\n\n{t(lang, 'edit_current_copyable')}\n<code>{html.escape(user.short_description)}</code>"
+        else:
+            text = t(lang, "short_description_request")
         break
     try:
-        await callback.message.edit_text(text, reply_markup=get_cancel_button())
+        await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_cancel_button())
+        await callback.message.answer(text, reply_markup=get_cancel_button(lang))
     await state.set_state(ProfileEditStates.editing_short_description)
     await state.update_data(last_bot_message_id=callback.message.message_id)
 
@@ -882,20 +965,26 @@ async def process_edit_short_description(message: Message, state: FSMContext) ->
     data = await state.get_data()
     last_msg_id = data.get("last_bot_message_id")
     
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, message.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
     if not validate_short_description(message.text):
         if last_msg_id:
             try:
-                from texts.messages import SHORT_DESCRIPTION_REQUEST
+                err_text = t(lang, "edit_short_desc_error") + "\n\n" + t(lang, "short_description_request")
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
-                    text="❌ Краткое описание: от 10 до 200 символов.\n\n" + SHORT_DESCRIPTION_REQUEST,
+                    text=err_text,
                     reply_markup=None
                 )
             except Exception:
                 pass
         return
-    
+
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
         if user:
@@ -910,17 +999,22 @@ async def start_edit_full_description(callback: CallbackQuery, state: FSMContext
     """Начало редактирования полного описания"""
     await callback.answer()
     from keyboards.common import get_cancel_button
-    from texts.messages import FULL_DESCRIPTION_REQUEST, EDIT_CURRENT_COPYABLE
-    text = FULL_DESCRIPTION_REQUEST
+    lang = "ru"
+    text = ""
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
-        if user and user.full_description:
-            text += f"\n\n{EDIT_CURRENT_COPYABLE}\n<pre>{html.escape(user.full_description)}</pre>"
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+            text = t(lang, "full_description_request")
+            if user.full_description:
+                text += f"\n\n{t(lang, 'edit_current_copyable')}\n<pre>{html.escape(user.full_description)}</pre>"
+        else:
+            text = t(lang, "full_description_request")
         break
     try:
-        await callback.message.edit_text(text, reply_markup=get_cancel_button())
+        await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_cancel_button())
+        await callback.message.answer(text, reply_markup=get_cancel_button(lang))
     await state.set_state(ProfileEditStates.editing_full_description)
     await state.update_data(last_bot_message_id=callback.message.message_id)
 
@@ -936,20 +1030,26 @@ async def process_edit_full_description(message: Message, state: FSMContext) -> 
     data = await state.get_data()
     last_msg_id = data.get("last_bot_message_id")
     
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, message.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
     if not validate_full_description(message.text):
         if last_msg_id:
             try:
-                from texts.messages import FULL_DESCRIPTION_REQUEST
+                err_text = t(lang, "edit_full_desc_error") + "\n\n" + t(lang, "full_description_request")
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
-                    text="❌ Полное описание: от 20 до 1000 символов.\n\n" + FULL_DESCRIPTION_REQUEST,
+                    text=err_text,
                     reply_markup=None
                 )
             except Exception:
                 pass
         return
-    
+
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
         if user:
@@ -959,14 +1059,33 @@ async def process_edit_full_description(message: Message, state: FSMContext) -> 
         break
 
 
-def _get_qualities_list(user_qualities: str | None) -> list[str]:
-    """Разбить строку качеств на список из 3 элементов (добить пустыми при необходимости)."""
+def _parse_qualities_to_slots(user_qualities: str | None) -> list[tuple[str, str]]:
+    """Разобрать строку качеств в до 3 слотов (emoji, text). Формат 'emoji|text\\n' или старый 'q1, q2, q3'."""
     if not user_qualities or not user_qualities.strip():
-        return ["", "", ""]
-    parts = [p.strip() for p in user_qualities.split(",", 2)]
-    while len(parts) < 3:
-        parts.append("")
-    return parts[:3]
+        return [("•", ""), ("•", ""), ("•", "")]
+    lines = [ln.strip() for ln in user_qualities.strip().split("\n") if ln.strip()]
+    slots = []
+    for line in lines[:3]:
+        if "|" in line:
+            emoji, text = line.split("|", 1)
+            slots.append((emoji.strip() or "•", text.strip()))
+        else:
+            slots.append(("•", line))
+    while len(slots) < 3:
+        slots.append(("•", ""))
+    return slots[:3]
+
+
+def _build_qualities_from_slots(slots: list[tuple[str, str]]) -> str:
+    """Собрать строку качеств из слотов (emoji, text). Пустые тексты пропускаются."""
+    lines = [f"{e}|{t}" for e, t in slots if t]
+    return "\n".join(lines) if lines else ""
+
+
+def _get_qualities_list(user_qualities: str | None) -> list[str]:
+    """Список из 3 строк для отображения: 'emoji text' (поддержка форматов emoji|text и запятая)."""
+    slots = _parse_qualities_to_slots(user_qualities)
+    return [f"{e} {t}".strip() if t else "" for e, t in slots]
 
 
 async def _start_edit_quality(
@@ -979,95 +1098,240 @@ async def _start_edit_quality(
     """Запрос одного качества (1–3)."""
     await callback.answer()
     from keyboards.common import get_cancel_button
-    from texts.messages import EDIT_CURRENT_COPYABLE
     text = request_text
+    lang = "ru"
     try:
         async for session in get_session():
             user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
-            if user and user.qualities:
-                parts = _get_qualities_list(user.qualities)
-                current = parts[quality_index] or "—"
-                text = f"{request_text}\n\n{EDIT_CURRENT_COPYABLE}\n<code>{html.escape(current)}</code>"
+            if user:
+                lang = getattr(user, "language", None) or "ru"
+                if user.qualities:
+                    slots = _parse_qualities_to_slots(user.qualities)
+                    if quality_index < len(slots):
+                        emoji, text_part = slots[quality_index]
+                        text_only = (text_part or "").strip()
+                        if text_only:
+                            current_line = f"{emoji} <code>{html.escape(text_only)}</code>"
+                        else:
+                            current_line = "—"
+                    else:
+                        current_line = "—"
+                    text = f"{request_text}\n\n{t(lang, 'edit_current_copyable')}\n{current_line}"
             break
-        await callback.message.edit_text(text, reply_markup=get_cancel_button())
+        await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_cancel_button())
+        await callback.message.answer(text, reply_markup=get_cancel_button(lang))
     await state.set_state(edit_state)
     await state.update_data(last_bot_message_id=callback.message.message_id, editing_quality_index=quality_index)
 
 
 @router.callback_query(F.data == "edit_quality_1")
 async def start_edit_quality_1(callback: CallbackQuery, state: FSMContext) -> None:
-    from texts.messages import QUALITY_1_REQUEST
-    await _start_edit_quality(callback, state, 0, QUALITY_1_REQUEST, ProfileEditStates.editing_quality_1)
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, callback.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
+    await _start_edit_quality(callback, state, 0, t(lang, "quality_1_request"), ProfileEditStates.editing_quality_1)
 
 
 @router.callback_query(F.data == "edit_quality_2")
 async def start_edit_quality_2(callback: CallbackQuery, state: FSMContext) -> None:
-    from texts.messages import QUALITY_2_REQUEST
-    await _start_edit_quality(callback, state, 1, QUALITY_2_REQUEST, ProfileEditStates.editing_quality_2)
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, callback.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
+    await _start_edit_quality(callback, state, 1, t(lang, "quality_2_request"), ProfileEditStates.editing_quality_2)
 
 
 @router.callback_query(F.data == "edit_quality_3")
 async def start_edit_quality_3(callback: CallbackQuery, state: FSMContext) -> None:
-    from texts.messages import QUALITY_3_REQUEST
-    await _start_edit_quality(callback, state, 2, QUALITY_3_REQUEST, ProfileEditStates.editing_quality_3)
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, callback.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
+    await _start_edit_quality(callback, state, 2, t(lang, "quality_3_request"), ProfileEditStates.editing_quality_3)
 
 
 async def _process_edit_quality(
     message: Message, state: FSMContext, request_text: str
 ) -> None:
-    """Сохранить одно качество и обновить профиль."""
-    try:
-        await message.delete()
-    except Exception:
-        pass
+    """Сохранить одно качество: текст без эмодзи, затем выбор смайлика и возврат в профиль."""
     data = await state.get_data()
     last_msg_id = data.get("last_bot_message_id")
     idx = data.get("editing_quality_index", 0)
+    lang = "ru"
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+        break
 
     if not validate_single_quality(message.text):
+        invalid_ids = list(data.get("invalid_user_message_ids") or [])
+        invalid_ids.append(message.message_id)
+        await state.update_data(invalid_user_message_ids=invalid_ids)
         if last_msg_id:
             try:
+                err_text = t(lang, "edit_quality_error") + "\n\n" + request_text
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
-                    text="❌ Укажи качество от 2 до 50 символов.\n\n" + request_text,
+                    text=err_text,
                     reply_markup=None,
                 )
             except Exception:
                 pass
         return
 
+    if text_contains_emoji(message.text):
+        invalid_ids = list(data.get("invalid_user_message_ids") or [])
+        invalid_ids.append(message.message_id)
+        warn_msg = await message.answer(t(lang, "quality_no_emoji_in_text"))
+        await state.update_data(
+            invalid_user_message_ids=invalid_ids,
+            last_warning_message_id=warn_msg.message_id,
+        )
+        return
+
+    # Валидный ввод: удаляем все предупреждения и неудачные попытки (последнее сообщение пользователя не трогаем)
+    chat_id = message.chat.id
+    bot = message.bot
+    for mid in (data.get("invalid_user_message_ids") or []):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=mid)
+        except Exception:
+            pass
+    if data.get("last_warning_message_id"):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=data["last_warning_message_id"])
+        except Exception:
+            pass
+    await state.update_data(invalid_user_message_ids=[], last_warning_message_id=None)
+
+    # Сохраняем новый текст и показываем выбор эмодзи (как при регистрации)
     new_value = message.text.strip()
-    async for session in get_session():
-        user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
-        if user:
-            parts = _get_qualities_list(user.qualities)
-            parts[idx] = new_value
-            qualities_str = ",".join(parts)
-            await UserRepository.update(session, user, qualities=qualities_str)
-            await state.clear()
-            await send_profile_view(message, message.from_user.id, state, edit_message_id=last_msg_id)
-        break
+    await state.update_data(
+        editing_quality_new_text=new_value,
+        edit_user_message_id=message.message_id,
+    )
+    from keyboards.quality_emoji import get_quality_emoji_keyboard
+    step = idx + 1
+    await message.answer(
+        t(lang, "quality_emoji_prompt"),
+        reply_markup=get_quality_emoji_keyboard(step, prefix="edit", lang=lang),
+    )
+    emoji_states = {
+        0: ProfileEditStates.editing_quality_1_emoji,
+        1: ProfileEditStates.editing_quality_2_emoji,
+        2: ProfileEditStates.editing_quality_3_emoji,
+    }
+    await state.set_state(emoji_states.get(idx, ProfileEditStates.editing_quality_1_emoji))
+
+
+@router.callback_query(F.data.regexp(r"^edit_q[123]_emoji:.+"))
+async def profile_edit_quality_emoji_selected(callback: CallbackQuery, state: FSMContext) -> None:
+    """Выбор смайлика при редактировании качества: применяем, чистим служебные сообщения и показываем профиль."""
+    from keyboards.quality_emoji import QUALITY_EMOJI_LIST
+    await callback.answer()
+    try:
+        parts = callback.data.split("_emoji:", 1)
+        if len(parts) != 2:
+            return
+        step_str = parts[0].replace("edit_q", "")
+        if step_str not in ("1", "2", "3"):
+            return
+        idx = int(step_str) - 1
+        emoji = parts[1].strip()
+        if emoji not in QUALITY_EMOJI_LIST:
+            return
+
+        data = await state.get_data()
+        new_text = (data.get("editing_quality_new_text") or "").strip()
+        last_msg_id = data.get("last_bot_message_id")
+        user_msg_id = data.get("edit_user_message_id")
+        chat_id = callback.message.chat.id
+        bot = callback.bot
+
+        # Удаляем сообщение с эмодзи-клавиатурой
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        # Удаляем сообщение-подсказку «введи качество», если есть
+        if last_msg_id:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=last_msg_id)
+            except Exception:
+                pass
+        # Удаляем сообщение пользователя с текстом качества (его попытку)
+        if user_msg_id:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=user_msg_id)
+            except Exception:
+                pass
+
+        # Обновляем качество в профиле
+        async for session in get_session():
+            user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
+            if user:
+                slots = _parse_qualities_to_slots(user.qualities)
+                if 0 <= idx < len(slots):
+                    slots[idx] = (emoji, new_text)
+                    qualities_str = _build_qualities_from_slots(slots)
+                    await UserRepository.update(session, user, qualities=qualities_str)
+            break
+
+        await state.clear()
+        # Показываем обновлённый профиль новым сообщением
+        await send_profile_view(callback.message, callback.from_user.id, state)
+    except Exception as e:
+        logger.error("Ошибка в profile_edit_quality_emoji_selected: %s", e, exc_info=True)
+        _lang = "ru"
+        async for s in get_session():
+            u = await UserRepository.get_by_telegram_id(s, callback.from_user.id)
+            if u:
+                _lang = getattr(u, "language", None) or "ru"
+            break
+        await callback.answer(t(_lang, "edit_quality_emoji_error"), show_alert=True)
 
 
 @router.message(ProfileEditStates.editing_quality_1)
 async def process_edit_quality_1(message: Message, state: FSMContext) -> None:
-    from texts.messages import QUALITY_1_REQUEST
-    await _process_edit_quality(message, state, QUALITY_1_REQUEST)
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, message.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
+    await _process_edit_quality(message, state, t(lang, "quality_1_request"))
 
 
 @router.message(ProfileEditStates.editing_quality_2)
 async def process_edit_quality_2(message: Message, state: FSMContext) -> None:
-    from texts.messages import QUALITY_2_REQUEST
-    await _process_edit_quality(message, state, QUALITY_2_REQUEST)
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, message.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
+    await _process_edit_quality(message, state, t(lang, "quality_2_request"))
 
 
 @router.message(ProfileEditStates.editing_quality_3)
 async def process_edit_quality_3(message: Message, state: FSMContext) -> None:
-    from texts.messages import QUALITY_3_REQUEST
-    await _process_edit_quality(message, state, QUALITY_3_REQUEST)
+    lang = "ru"
+    async for s in get_session():
+        u = await UserRepository.get_by_telegram_id(s, message.from_user.id)
+        if u:
+            lang = getattr(u, "language", None) or "ru"
+        break
+    await _process_edit_quality(message, state, t(lang, "quality_3_request"))
 
 
 def register_handlers(dp) -> None:

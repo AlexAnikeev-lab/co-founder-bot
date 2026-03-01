@@ -28,6 +28,7 @@ from texts.messages import (
 from texts.i18n import t
 from keyboards.common import (
     get_accept_button,
+    get_accept_and_cancel_keyboard,
     get_learning_mode_button,
     get_cancel_button,
     get_skip_and_cancel_keyboard,
@@ -41,14 +42,15 @@ from repositories.admin_archive_repository import AdminArchiveRepository
 from repositories.database import get_session
 from config import Config
 from utils.validators import (
-    validate_age, 
-    validate_name, 
+    validate_age,
+    validate_name,
     validate_photo,
     validate_short_description,
     validate_full_description,
     validate_single_quality,
+    text_contains_emoji,
 )
-from utils.errors import handle_error
+from utils.errors import handle_error, notify_admin_new_user
 from utils.registration_photos import show_registration_step
 
 logger = logging.getLogger(__name__)
@@ -90,6 +92,7 @@ async def set_language(callback: CallbackQuery, state: FSMContext) -> None:
             "welcome_1",
             t(lang, "welcome_1"),
             get_start_button(lang),
+            lang=lang,
         )
         if mid is not None:
             await state.update_data(last_bot_message_id=mid)
@@ -119,19 +122,20 @@ async def ask_age(message: Message, state: FSMContext) -> None:
         last_msg_id,
         "age",
         birth_text,
-        get_cancel_button(),
+        get_cancel_button(lang),
+        lang=lang,
     )
     if mid is not None:
         await state.update_data(last_bot_message_id=mid)
     else:
         if last_msg_id:
             try:
-                await message.edit_text(birth_text, reply_markup=get_cancel_button())
+                await message.edit_text(birth_text, reply_markup=get_cancel_button(lang))
             except Exception:
-                sent = await message.answer(birth_text, reply_markup=get_cancel_button())
+                sent = await message.answer(birth_text, reply_markup=get_cancel_button(lang))
                 await state.update_data(last_bot_message_id=sent.message_id)
         else:
-            sent = await message.answer(birth_text, reply_markup=get_cancel_button())
+            sent = await message.answer(birth_text, reply_markup=get_cancel_button(lang))
             await state.update_data(last_bot_message_id=sent.message_id)
     await state.set_state(RegistrationStates.waiting_for_age)
 
@@ -149,7 +153,8 @@ async def process_age(message: Message, state: FSMContext) -> None:
         data = await state.get_data()
         last_msg_id = data.get("last_bot_message_id")
         if not last_msg_id:
-            await message.answer("❌ Ошибка. Начни с /start")
+            lang = data.get("language", "ru")
+            await message.answer(t(lang, "error_start_required"))
             return
 
         age = validate_age(message.text)
@@ -159,14 +164,14 @@ async def process_age(message: Message, state: FSMContext) -> None:
         if not age:
             err_caption = t(lang, "birth_date_error") + "\n\n" + birth_text
             mid2 = await show_registration_step(
-                message.bot, message.chat.id, last_msg_id, "age", err_caption, get_cancel_button()
+                message.bot, message.chat.id, last_msg_id, "age", err_caption, get_cancel_button(lang), lang=lang,
             )
             if mid2 is None:
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=err_caption,
-                    reply_markup=get_cancel_button(),
+                    reply_markup=get_cancel_button(lang),
                 )
             return
 
@@ -176,28 +181,28 @@ async def process_age(message: Message, state: FSMContext) -> None:
             learning_text = t(lang, "learning_mode_message")
             mid2 = await show_registration_step(
                 message.bot, message.chat.id, last_msg_id, "learning_mode",
-                learning_text, get_learning_mode_button(),
+                learning_text, get_learning_mode_button(lang), lang=lang,
             )
             if mid2 is None:
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=learning_text,
-                    reply_markup=get_learning_mode_button(),
+                    reply_markup=get_learning_mode_button(lang),
                 )
             await state.update_data(is_minor=True)
         else:
             legal_text = t(lang, "legal_agreement")
             mid2 = await show_registration_step(
                 message.bot, message.chat.id, last_msg_id, "legal",
-                legal_text, get_accept_button(lang),
+                legal_text, get_accept_and_cancel_keyboard(lang), lang=lang,
             )
             if mid2 is None:
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=legal_text,
-                    reply_markup=get_accept_button(lang),
+                    reply_markup=get_accept_and_cancel_keyboard(lang),
                 )
             await state.set_state(RegistrationStates.waiting_for_legal_agreement)
             await state.update_data(is_minor=False)
@@ -210,14 +215,14 @@ async def process_age(message: Message, state: FSMContext) -> None:
                 err_lang = (await state.get_data()).get("language", "ru")
                 err_caption = "❌ " + ("Произошла ошибка. Попробуй ещё раз." if err_lang == "ru" else "Something went wrong. Try again.") + "\n\n" + t(err_lang, "birth_date_question")
                 mid2 = await show_registration_step(
-                    message.bot, message.chat.id, last_msg_id, "age", err_caption, get_cancel_button()
+                    message.bot, message.chat.id, last_msg_id, "age", err_caption, get_cancel_button(err_lang), lang=err_lang,
                 )
                 if mid2 is None:
                     await message.bot.edit_message_text(
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
                         text=err_caption,
-                        reply_markup=get_cancel_button(),
+                        reply_markup=get_cancel_button(err_lang),
                     )
             except Exception:
                 pass
@@ -241,12 +246,13 @@ async def start_learning_mode(callback: CallbackQuery, state: FSMContext) -> Non
                 callback.message.message_id,
                 "telegram",
                 telegram_text,
-                get_cancel_button(),
+                get_cancel_button(lang),
+                lang=lang,
             )
             if mid is None:
                 await callback.message.edit_text(
                     telegram_text,
-                    reply_markup=get_cancel_button(),
+                    reply_markup=get_cancel_button(lang),
                 )
             await state.update_data(last_bot_message_id=callback.message.message_id)
             await state.set_state(RegistrationStates.waiting_for_telegram_access)
@@ -272,6 +278,7 @@ async def accept_legal(callback: CallbackQuery, state: FSMContext) -> None:
             "telegram",
             caption_text,
             None,
+            lang=lang,
         )
         if mid is not None:
             await state.update_data(last_bot_message_id=mid)
@@ -284,7 +291,7 @@ async def accept_legal(callback: CallbackQuery, state: FSMContext) -> None:
 
         keyboard_msg = await callback.message.answer(
             t(lang, "contact_request_hint"),
-            reply_markup=get_contact_request_keyboard(),
+            reply_markup=get_contact_request_keyboard(lang),
         )
         await state.update_data(keyboard_message_id=keyboard_msg.message_id)
         await state.set_state(RegistrationStates.waiting_for_telegram_access)
@@ -326,7 +333,7 @@ async def process_telegram_access(message: Message, state: FSMContext, phone: st
         if not is_minor and not phone and not message.contact:
             if last_msg_id:
                 err_text = "❌ " + t(lang, "contact_please_send") + "\n\n" + t(lang, "telegram_phone_access_request")
-                if await show_registration_step(message.bot, message.chat.id, last_msg_id, "telegram", err_text, None) is None:
+                if await show_registration_step(message.bot, message.chat.id, last_msg_id, "telegram", err_text, None, lang=lang) is None:
                     try:
                         await message.bot.edit_message_text(
                             chat_id=message.chat.id,
@@ -338,7 +345,7 @@ async def process_telegram_access(message: Message, state: FSMContext, phone: st
                         pass
                 keyboard_msg = await message.answer(
                     "📱",
-                    reply_markup=get_contact_request_keyboard(),
+                    reply_markup=get_contact_request_keyboard(lang),
                 )
                 await state.update_data(keyboard_message_id=keyboard_msg.message_id)
             return
@@ -364,7 +371,7 @@ async def process_telegram_access(message: Message, state: FSMContext, phone: st
             name_text = t(lang, "name_request") if is_minor else t(lang, "name_request_profile")
             # Редактируем предыдущее сообщение (с «Allow access») в запрос имени, чтобы не слать второе сообщение
             mid2 = await show_registration_step(
-                message.bot, message.chat.id, last_msg_id, "name", name_text, get_cancel_button(),
+                message.bot, message.chat.id, last_msg_id, "name", name_text, get_cancel_button(lang), lang=lang,
             )
             if mid2 is not None:
                 await state.update_data(last_bot_message_id=mid2, keyboard_message_id=None)
@@ -374,7 +381,7 @@ async def process_telegram_access(message: Message, state: FSMContext, phone: st
                         await message.bot.delete_message(chat_id=message.chat.id, message_id=last_msg_id)
                     except Exception:
                         pass
-                sent = await message.answer(name_text, reply_markup=get_cancel_button())
+                sent = await message.answer(name_text, reply_markup=get_cancel_button(lang))
                 await state.update_data(last_bot_message_id=sent.message_id, keyboard_message_id=None)
             await state.set_state(RegistrationStates.waiting_for_name)
             break
@@ -382,16 +389,18 @@ async def process_telegram_access(message: Message, state: FSMContext, phone: st
     except Exception as e:
         logger.error(f"Ошибка в process_telegram_access: {e}", exc_info=True)
         await handle_error(None, e, "process_telegram_access")
-        last_msg_id = (await state.get_data()).get("last_bot_message_id")
+        data = await state.get_data()
+        last_msg_id = data.get("last_bot_message_id")
+        err_lang = data.get("language", "ru")
         if last_msg_id:
-            err_text = "❌ Произошла ошибка. Попробуй ещё раз."
-            if await show_registration_step(message.bot, message.chat.id, last_msg_id, "telegram", err_text, get_cancel_button()) is None:
+            err_text = "❌ " + t(err_lang, "error_try_later")
+            if await show_registration_step(message.bot, message.chat.id, last_msg_id, "telegram", err_text, get_cancel_button(err_lang), lang=err_lang) is None:
                 try:
                     await message.bot.edit_message_text(
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
                         text=err_text,
-                        reply_markup=get_cancel_button(),
+                        reply_markup=get_cancel_button(err_lang),
                     )
                 except Exception:
                     pass
@@ -409,20 +418,21 @@ async def process_name(message: Message, state: FSMContext) -> None:
         data = await state.get_data()
         last_msg_id = data.get("last_bot_message_id")
         if not last_msg_id:
-            await message.answer("❌ Ошибка. Начни с /start")
+            lang = data.get("language", "ru")
+            await message.answer(t(lang, "error_start_required"))
             return
 
         lang = data.get("language", "ru")
         if not validate_name(message.text):
             name_text = t(lang, "name_request") if data.get("is_minor") else t(lang, "name_request_profile")
             err_text = "❌ " + ("Имя: от 2 до 50 символов, только буквы." if lang == "ru" else "Name: 2–50 characters, letters only.") + "\n\n" + name_text
-            if await show_registration_step(message.bot, message.chat.id, last_msg_id, "name", err_text, get_cancel_button()) is None:
+            if await show_registration_step(message.bot, message.chat.id, last_msg_id, "name", err_text, get_cancel_button(lang), lang=lang) is None:
                 try:
                     await message.bot.edit_message_text(
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
                         text=err_text,
-                        reply_markup=get_cancel_button(),
+                        reply_markup=get_cancel_button(lang),
                     )
                 except Exception:
                     pass
@@ -440,7 +450,7 @@ async def process_name(message: Message, state: FSMContext) -> None:
                     success_text = t(lang, "success_registration")
                     mid2 = await show_registration_step(
                         message.bot, message.chat.id, last_msg_id, "success",
-                        success_text, None,
+                        success_text, None, lang=lang,
                     )
                     if mid2 is None:
                         await message.bot.edit_message_text(
@@ -457,14 +467,14 @@ async def process_name(message: Message, state: FSMContext) -> None:
             photo_text = t(lang, "photo_request")
             mid2 = await show_registration_step(
                 message.bot, message.chat.id, last_msg_id, "photo",
-                photo_text, get_cancel_button(),
+                photo_text, get_cancel_button(lang), lang=lang,
             )
             if mid2 is None:
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=photo_text,
-                    reply_markup=get_cancel_button(),
+                    reply_markup=get_cancel_button(lang),
                 )
             await state.set_state(RegistrationStates.waiting_for_photo)
 
@@ -477,7 +487,7 @@ async def process_name(message: Message, state: FSMContext) -> None:
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text="❌ Произошла ошибка. Попробуй ещё раз.",
-                    reply_markup=get_cancel_button()
+                    reply_markup=get_cancel_button(lang)
                 )
             except Exception:
                 pass
@@ -499,13 +509,13 @@ async def process_photo(message: Message, state: FSMContext) -> None:
         if not validate_photo(photo_id):
             if last_msg_id:
                 err_text = "❌ " + ("Не удалось обработать фото. Попробуй ещё раз." if lang == "ru" else "Could not process photo. Try again.") + "\n\n" + t(lang, "photo_request")
-                if await show_registration_step(message.bot, message.chat.id, last_msg_id, "photo", err_text, get_cancel_button()) is None:
+                if await show_registration_step(message.bot, message.chat.id, last_msg_id, "photo", err_text, get_cancel_button(lang), lang=lang) is None:
                     try:
                         await message.bot.edit_message_text(
                             chat_id=message.chat.id,
                             message_id=last_msg_id,
                             text=err_text,
-                            reply_markup=get_cancel_button(),
+                            reply_markup=get_cancel_button(lang),
                         )
                     except Exception:
                         pass
@@ -516,7 +526,7 @@ async def process_photo(message: Message, state: FSMContext) -> None:
         q1_text = t(lang, "quality_1_request") + t(lang, "reg_skip_hint")
         mid2 = await show_registration_step(
             message.bot, message.chat.id, last_msg_id, "quality_1",
-            q1_text, get_skip_and_cancel_keyboard(),
+            q1_text, get_skip_and_cancel_keyboard(lang), lang=lang,
         )
         if mid2 is not None:
             await state.update_data(last_bot_message_id=mid2)
@@ -526,13 +536,13 @@ async def process_photo(message: Message, state: FSMContext) -> None:
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=q1_text,
-                    reply_markup=get_skip_and_cancel_keyboard(),
+                    reply_markup=get_skip_and_cancel_keyboard(lang),
                 )
             except Exception:
-                sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard())
+                sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard(lang))
                 await state.update_data(last_bot_message_id=sent.message_id)
         else:
-            sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard())
+            sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard(lang))
             await state.update_data(last_bot_message_id=sent.message_id)
 
         await state.set_state(RegistrationStates.waiting_for_quality_1)
@@ -547,7 +557,7 @@ async def process_photo(message: Message, state: FSMContext) -> None:
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=("❌ Произошла ошибка. Попробуй ещё раз.\n\n" if err_lang == "ru" else "❌ Something went wrong. Try again.\n\n") + t(err_lang, "photo_request"),
-                    reply_markup=get_cancel_button()
+                    reply_markup=get_cancel_button(err_lang)
                 )
             except Exception:
                 pass
@@ -565,13 +575,13 @@ async def process_photo_invalid(message: Message, state: FSMContext) -> None:
     lang = data.get("language", "ru")
     if last_msg_id:
         err_text = "❌ " + ("Пожалуйста, отправь фото." if lang == "ru" else "Please send a photo.") + "\n\n" + t(lang, "photo_request")
-        if await show_registration_step(message.bot, message.chat.id, last_msg_id, "photo", err_text, get_cancel_button()) is None:
+        if await show_registration_step(message.bot, message.chat.id, last_msg_id, "photo", err_text, get_cancel_button(lang), lang=lang) is None:
             try:
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=err_text,
-                    reply_markup=get_cancel_button(),
+                    reply_markup=get_cancel_button(lang),
                 )
             except Exception:
                 pass
@@ -598,7 +608,7 @@ async def process_short_description(message: Message, state: FSMContext) -> None
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
                         text=err,
-                        reply_markup=get_skip_and_cancel_keyboard(),
+                        reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
                     pass
@@ -608,7 +618,7 @@ async def process_short_description(message: Message, state: FSMContext) -> None
         full_text = t(lang, "full_description_request") + t(lang, "reg_skip_hint")
         mid2 = await show_registration_step(
             message.bot, message.chat.id, last_msg_id, "full_desc",
-            full_text, get_skip_and_cancel_keyboard(),
+            full_text, get_skip_and_cancel_keyboard(lang), lang=lang,
         )
         if mid2 is not None:
             await state.update_data(last_bot_message_id=mid2)
@@ -618,13 +628,13 @@ async def process_short_description(message: Message, state: FSMContext) -> None
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=full_text,
-                    reply_markup=get_skip_and_cancel_keyboard(),
+                    reply_markup=get_skip_and_cancel_keyboard(lang),
                 )
             except Exception:
-                sent = await message.answer(full_text, reply_markup=get_skip_and_cancel_keyboard())
+                sent = await message.answer(full_text, reply_markup=get_skip_and_cancel_keyboard(lang))
                 await state.update_data(last_bot_message_id=sent.message_id)
         else:
-            sent = await message.answer(full_text, reply_markup=get_skip_and_cancel_keyboard())
+            sent = await message.answer(full_text, reply_markup=get_skip_and_cancel_keyboard(lang))
             await state.update_data(last_bot_message_id=sent.message_id)
 
         await state.set_state(RegistrationStates.waiting_for_full_description)
@@ -655,7 +665,7 @@ async def process_full_description(message: Message, state: FSMContext) -> None:
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
                         text=err,
-                        reply_markup=get_skip_and_cancel_keyboard(),
+                        reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
                     pass
@@ -671,12 +681,14 @@ async def process_full_description(message: Message, state: FSMContext) -> None:
 
 
 def _build_qualities_string(data: dict) -> str | None:
-    """Собрать строку качеств из quality_1, quality_2, quality_3 или None."""
-    q1 = (data.get("quality_1") or "").strip()
-    q2 = (data.get("quality_2") or "").strip()
-    q3 = (data.get("quality_3") or "").strip()
-    parts = [q for q in (q1, q2, q3) if q]
-    return ", ".join(parts) if parts else None
+    """Собрать строку качеств в формате emoji|text (по одной строке на качество). Если смайлик не выбран — используется •."""
+    lines = []
+    for i in (1, 2, 3):
+        text = (data.get(f"quality_{i}") or "").strip()
+        emoji = (data.get(f"quality_{i}_emoji") or "").strip() or "•"
+        if text:
+            lines.append(f"{emoji}|{text}")
+    return "\n".join(lines) if lines else None
 
 
 async def _complete_registration(
@@ -704,6 +716,15 @@ async def _complete_registration(
                 await AdminArchiveRepository.create_from_user(session, user)
             except Exception as e:
                 logger.exception("Ошибка сохранения в архив админа: %s", e)
+            try:
+                await notify_admin_new_user(
+                    message.bot,
+                    user.name or "",
+                    user.telegram_id,
+                    user.username,
+                )
+            except Exception as e:
+                logger.exception("Ошибка уведомления о новом пользователе: %s", e)
             last_msg_id = data.get("last_bot_message_id")
             lang = data.get("language", "ru")
             success_text = t(lang, "success_registration_offer_test")
@@ -711,6 +732,7 @@ async def _complete_registration(
                 message.bot, message.chat.id, last_msg_id, "success",
                 success_text,
                 get_post_registration_offer_keyboard(lang=lang),
+                lang=lang,
             )
             if mid2 is not None:
                 pass
@@ -745,11 +767,11 @@ async def reg_skip(callback: CallbackQuery, state: FSMContext) -> None:
         if current == RegistrationStates.waiting_for_short_description.state:
             await state.update_data(short_description=None)
             text = t(lang, "full_description_request") + t(lang, "reg_skip_hint")
-            if await show_registration_step(bot, msg.chat.id, last_msg_id, "full_desc", text, get_skip_and_cancel_keyboard()) is None:
+            if await show_registration_step(bot, msg.chat.id, last_msg_id, "full_desc", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
                 try:
-                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard())
+                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
                 except Exception:
-                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard())
+                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
             await state.set_state(RegistrationStates.waiting_for_full_description)
             return
         if current == RegistrationStates.waiting_for_full_description.state:
@@ -760,49 +782,89 @@ async def reg_skip(callback: CallbackQuery, state: FSMContext) -> None:
         if current == RegistrationStates.waiting_for_quality_1.state:
             await state.update_data(quality_1=None)
             text = t(lang, "quality_2_request") + t(lang, "reg_skip_hint")
-            if await show_registration_step(bot, msg.chat.id, last_msg_id, "quality_2", text, get_skip_and_cancel_keyboard()) is None:
+            if await show_registration_step(bot, msg.chat.id, last_msg_id, "quality_2", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
                 try:
-                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard())
+                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
                 except Exception:
-                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard())
+                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+            await state.set_state(RegistrationStates.waiting_for_quality_2)
+            return
+        if current == RegistrationStates.waiting_for_quality_1_emoji.state:
+            text = t(lang, "quality_2_request") + t(lang, "reg_skip_hint")
+            if await show_registration_step(bot, msg.chat.id, last_msg_id, "quality_2", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
+                try:
+                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                except Exception:
+                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
             await state.set_state(RegistrationStates.waiting_for_quality_2)
             return
         if current == RegistrationStates.waiting_for_quality_2.state:
             await state.update_data(quality_2=None)
             text = t(lang, "quality_3_request") + t(lang, "reg_skip_hint")
-            if await show_registration_step(bot, msg.chat.id, last_msg_id, "quality_3", text, get_skip_and_cancel_keyboard()) is None:
+            if await show_registration_step(bot, msg.chat.id, last_msg_id, "quality_3", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
                 try:
-                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard())
+                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
                 except Exception:
-                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard())
+                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+            await state.set_state(RegistrationStates.waiting_for_quality_3)
+            return
+        if current == RegistrationStates.waiting_for_quality_2_emoji.state:
+            text = t(lang, "quality_3_request") + t(lang, "reg_skip_hint")
+            if await show_registration_step(bot, msg.chat.id, last_msg_id, "quality_3", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
+                try:
+                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                except Exception:
+                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
             await state.set_state(RegistrationStates.waiting_for_quality_3)
             return
         if current == RegistrationStates.waiting_for_quality_3.state:
             await state.update_data(quality_3=None)
             text = t(lang, "short_description_request") + t(lang, "reg_skip_hint")
-            if await show_registration_step(bot, msg.chat.id, last_msg_id, "short_desc", text, get_skip_and_cancel_keyboard()) is None:
+            if await show_registration_step(bot, msg.chat.id, last_msg_id, "short_desc", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
                 try:
-                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard())
+                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
                 except Exception:
-                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard())
+                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+            await state.set_state(RegistrationStates.waiting_for_short_description)
+            return
+        if current == RegistrationStates.waiting_for_quality_3_emoji.state:
+            text = t(lang, "short_description_request") + t(lang, "reg_skip_hint")
+            if await show_registration_step(bot, msg.chat.id, last_msg_id, "short_desc", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
+                try:
+                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                except Exception:
+                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
             await state.set_state(RegistrationStates.waiting_for_short_description)
     except Exception as e:
         logger.error(f"Ошибка в reg_skip: {e}", exc_info=True)
         await handle_error(None, e, "reg_skip")
+    
+
+async def _cleanup_quality_warnings_and_attempts(bot, chat_id: int, data: dict) -> None:
+    """Удалить все предупреждения и неудачные попытки ввода (по id из state)."""
+    for mid in (data.get("invalid_user_message_ids") or []):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=mid)
+        except Exception:
+            pass
+    if data.get("last_warning_message_id"):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=data["last_warning_message_id"])
+        except Exception:
+            pass
 
 
 @router.message(RegistrationStates.waiting_for_quality_1)
 async def process_quality_1(message: Message, state: FSMContext) -> None:
-    """Обработка первого качества"""
+    """Обработка первого качества. Эмодзи в тексте запрещены; при валидном вводе удаляем предупреждения и неудачные попытки."""
     try:
-        try:
-            await message.delete()
-        except Exception:
-            pass
         data = await state.get_data()
         last_msg_id = data.get("last_bot_message_id")
         lang = data.get("language", "ru")
         if not validate_single_quality(message.text):
+            invalid_ids = list(data.get("invalid_user_message_ids") or [])
+            invalid_ids.append(message.message_id)
+            await state.update_data(invalid_user_message_ids=invalid_ids)
             if last_msg_id:
                 try:
                     err = "❌ " + ("Укажи качество от 2 до 50 символов." if lang == "ru" else "Enter 2–50 characters.") + "\n\n" + t(lang, "quality_1_request") + t(lang, "reg_skip_hint")
@@ -810,34 +872,40 @@ async def process_quality_1(message: Message, state: FSMContext) -> None:
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
                         text=err,
-                        reply_markup=get_skip_and_cancel_keyboard(),
+                        reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
                     pass
             return
-        await state.update_data(quality_1=message.text.strip())
-        text = t(lang, "quality_2_request") + t(lang, "reg_skip_hint")
-        mid2 = await show_registration_step(
-            message.bot, message.chat.id, last_msg_id, "quality_2",
-            text, get_skip_and_cancel_keyboard(),
-        )
-        if mid2 is not None:
-            await state.update_data(last_bot_message_id=mid2)
-        elif last_msg_id:
-            try:
+        if text_contains_emoji(message.text):
+            invalid_ids = list(data.get("invalid_user_message_ids") or [])
+            invalid_ids.append(message.message_id)
+            warn_msg = await message.answer(t(lang, "quality_no_emoji_in_text"))
+            await state.update_data(
+                invalid_user_message_ids=invalid_ids,
+                last_warning_message_id=warn_msg.message_id,
+            )
+            return
+        await _cleanup_quality_warnings_and_attempts(message.bot, message.chat.id, data)
+        await state.update_data(quality_1=message.text.strip(), invalid_user_message_ids=[], last_warning_message_id=None)
+        text = t(lang, "quality_emoji_prompt")
+        from keyboards.quality_emoji import get_quality_emoji_keyboard
+        kb = get_quality_emoji_keyboard(1, prefix="reg", lang=lang)
+        try:
+            if last_msg_id:
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=text,
-                    reply_markup=get_skip_and_cancel_keyboard(),
+                    reply_markup=kb,
                 )
-            except Exception:
-                sent = await message.answer(text, reply_markup=get_skip_and_cancel_keyboard())
+            else:
+                sent = await message.answer(text, reply_markup=kb)
                 await state.update_data(last_bot_message_id=sent.message_id)
-        else:
-            sent = await message.answer(text, reply_markup=get_skip_and_cancel_keyboard())
+        except Exception:
+            sent = await message.answer(text, reply_markup=kb)
             await state.update_data(last_bot_message_id=sent.message_id)
-        await state.set_state(RegistrationStates.waiting_for_quality_2)
+        await state.set_state(RegistrationStates.waiting_for_quality_1_emoji)
     except Exception as e:
         logger.error(f"Ошибка в process_quality_1: {e}", exc_info=True)
         await handle_error(None, e, "process_quality_1")
@@ -845,16 +913,15 @@ async def process_quality_1(message: Message, state: FSMContext) -> None:
 
 @router.message(RegistrationStates.waiting_for_quality_2)
 async def process_quality_2(message: Message, state: FSMContext) -> None:
-    """Обработка второго качества"""
+    """Обработка второго качества. Эмодзи в тексте запрещены; при валидном вводе удаляем предупреждения и неудачные попытки."""
     try:
-        try:
-            await message.delete()
-        except Exception:
-            pass
         data = await state.get_data()
         last_msg_id = data.get("last_bot_message_id")
         lang = data.get("language", "ru")
         if not validate_single_quality(message.text):
+            invalid_ids = list(data.get("invalid_user_message_ids") or [])
+            invalid_ids.append(message.message_id)
+            await state.update_data(invalid_user_message_ids=invalid_ids)
             if last_msg_id:
                 try:
                     err = "❌ " + ("Укажи качество от 2 до 50 символов." if lang == "ru" else "Enter 2–50 characters.") + "\n\n" + t(lang, "quality_2_request") + t(lang, "reg_skip_hint")
@@ -862,34 +929,40 @@ async def process_quality_2(message: Message, state: FSMContext) -> None:
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
                         text=err,
-                        reply_markup=get_skip_and_cancel_keyboard(),
+                        reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
                     pass
             return
-        await state.update_data(quality_2=message.text.strip())
-        text = t(lang, "quality_3_request") + t(lang, "reg_skip_hint")
-        mid2 = await show_registration_step(
-            message.bot, message.chat.id, last_msg_id, "quality_3",
-            text, get_skip_and_cancel_keyboard(),
-        )
-        if mid2 is not None:
-            await state.update_data(last_bot_message_id=mid2)
-        elif last_msg_id:
-            try:
+        if text_contains_emoji(message.text):
+            invalid_ids = list(data.get("invalid_user_message_ids") or [])
+            invalid_ids.append(message.message_id)
+            warn_msg = await message.answer(t(lang, "quality_no_emoji_in_text"))
+            await state.update_data(
+                invalid_user_message_ids=invalid_ids,
+                last_warning_message_id=warn_msg.message_id,
+            )
+            return
+        await _cleanup_quality_warnings_and_attempts(message.bot, message.chat.id, data)
+        await state.update_data(quality_2=message.text.strip(), invalid_user_message_ids=[], last_warning_message_id=None)
+        text = t(lang, "quality_emoji_prompt")
+        from keyboards.quality_emoji import get_quality_emoji_keyboard
+        kb = get_quality_emoji_keyboard(2, prefix="reg", lang=lang)
+        try:
+            if last_msg_id:
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
                     text=text,
-                    reply_markup=get_skip_and_cancel_keyboard(),
+                    reply_markup=kb,
                 )
-            except Exception:
-                sent = await message.answer(text, reply_markup=get_skip_and_cancel_keyboard())
+            else:
+                sent = await message.answer(text, reply_markup=kb)
                 await state.update_data(last_bot_message_id=sent.message_id)
-        else:
-            sent = await message.answer(text, reply_markup=get_skip_and_cancel_keyboard())
+        except Exception:
+            sent = await message.answer(text, reply_markup=kb)
             await state.update_data(last_bot_message_id=sent.message_id)
-        await state.set_state(RegistrationStates.waiting_for_quality_3)
+        await state.set_state(RegistrationStates.waiting_for_quality_2_emoji)
     except Exception as e:
         logger.error(f"Ошибка в process_quality_2: {e}", exc_info=True)
         await handle_error(None, e, "process_quality_2")
@@ -897,16 +970,15 @@ async def process_quality_2(message: Message, state: FSMContext) -> None:
 
 @router.message(RegistrationStates.waiting_for_quality_3)
 async def process_quality_3(message: Message, state: FSMContext) -> None:
-    """Обработка третьего качества, далее — краткое описание"""
+    """Обработка третьего качества. Эмодзи в тексте запрещены; при валидном вводе удаляем предупреждения и неудачные попытки."""
     try:
-        try:
-            await message.delete()
-        except Exception:
-            pass
         data = await state.get_data()
         last_msg_id = data.get("last_bot_message_id")
         lang = data.get("language", "ru")
         if not validate_single_quality(message.text):
+            invalid_ids = list(data.get("invalid_user_message_ids") or [])
+            invalid_ids.append(message.message_id)
+            await state.update_data(invalid_user_message_ids=invalid_ids)
             if last_msg_id:
                 try:
                     err = "❌ " + ("Укажи качество от 2 до 50 символов." if lang == "ru" else "Enter 2–50 characters.") + "\n\n" + t(lang, "quality_3_request") + t(lang, "reg_skip_hint")
@@ -914,38 +986,135 @@ async def process_quality_3(message: Message, state: FSMContext) -> None:
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
                         text=err,
-                        reply_markup=get_skip_and_cancel_keyboard(),
+                        reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
                     pass
             return
-        await state.update_data(quality_3=message.text.strip())
-        data = await state.get_data()
-        short_text = t(data.get("language", "ru"), "short_description_request") + t(data.get("language", "ru"), "reg_skip_hint")
-        mid2 = await show_registration_step(
-            message.bot, message.chat.id, data.get("last_bot_message_id"), "short_desc",
-            short_text, get_skip_and_cancel_keyboard(),
-        )
-        if mid2 is not None:
-            await state.update_data(last_bot_message_id=mid2)
-        elif data.get("last_bot_message_id"):
-            try:
+        if text_contains_emoji(message.text):
+            invalid_ids = list(data.get("invalid_user_message_ids") or [])
+            invalid_ids.append(message.message_id)
+            warn_msg = await message.answer(t(lang, "quality_no_emoji_in_text"))
+            await state.update_data(
+                invalid_user_message_ids=invalid_ids,
+                last_warning_message_id=warn_msg.message_id,
+            )
+            return
+        await _cleanup_quality_warnings_and_attempts(message.bot, message.chat.id, data)
+        await state.update_data(quality_3=message.text.strip(), invalid_user_message_ids=[], last_warning_message_id=None)
+        text = t(lang, "quality_emoji_prompt")
+        from keyboards.quality_emoji import get_quality_emoji_keyboard
+        kb = get_quality_emoji_keyboard(3, prefix="reg", lang=lang)
+        try:
+            if last_msg_id:
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
-                    message_id=data["last_bot_message_id"],
-                    text=short_text,
-                    reply_markup=get_skip_and_cancel_keyboard(),
+                    message_id=last_msg_id,
+                    text=text,
+                    reply_markup=kb,
                 )
-            except Exception:
-                sent = await message.answer(short_text, reply_markup=get_skip_and_cancel_keyboard())
+            else:
+                sent = await message.answer(text, reply_markup=kb)
                 await state.update_data(last_bot_message_id=sent.message_id)
-        else:
-            sent = await message.answer(short_text, reply_markup=get_skip_and_cancel_keyboard())
+        except Exception:
+            sent = await message.answer(text, reply_markup=kb)
             await state.update_data(last_bot_message_id=sent.message_id)
-        await state.set_state(RegistrationStates.waiting_for_short_description)
+        await state.set_state(RegistrationStates.waiting_for_quality_3_emoji)
     except Exception as e:
         logger.error(f"Ошибка в process_quality_3: {e}", exc_info=True)
         await handle_error(None, e, "process_quality_3")
+
+
+@router.callback_query(F.data.regexp(r"^reg_q[123]_emoji:.+"))
+async def reg_quality_emoji_selected(callback: CallbackQuery, state: FSMContext) -> None:
+    """Выбор смайлика для качества в регистрации: сохранить и перейти к следующему шагу."""
+    await callback.answer()
+    from keyboards.quality_emoji import QUALITY_EMOJI_LIST
+    try:
+        # callback.data = "reg_q1_emoji:🔥"
+        parts = callback.data.split("_emoji:", 1)
+        if len(parts) != 2:
+            return
+        step_str = parts[0].replace("reg_q", "")
+        if step_str not in ("1", "2", "3"):
+            return
+        step = int(step_str)
+        emoji = parts[1].strip()
+        if emoji not in QUALITY_EMOJI_LIST:
+            return
+        await state.update_data(**{f"quality_{step}_emoji": emoji})
+        data = await state.get_data()
+        lang = data.get("language", "ru")
+        last_msg_id = data.get("last_bot_message_id")
+        msg = callback.message
+        bot = callback.bot
+
+        if step == 1:
+            text = t(lang, "quality_2_request") + t(lang, "reg_skip_hint")
+            mid2 = await show_registration_step(
+                bot, msg.chat.id, last_msg_id, "quality_2",
+                text, get_skip_and_cancel_keyboard(lang), lang=lang,
+            )
+            if mid2 is not None:
+                await state.update_data(last_bot_message_id=mid2)
+            elif last_msg_id:
+                try:
+                    await bot.edit_message_text(
+                        chat_id=msg.chat.id, message_id=last_msg_id,
+                        text=text, reply_markup=get_skip_and_cancel_keyboard(lang),
+                    )
+                except Exception:
+                    sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(last_bot_message_id=sent.message_id)
+            else:
+                sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(last_bot_message_id=sent.message_id)
+            await state.set_state(RegistrationStates.waiting_for_quality_2)
+        elif step == 2:
+            text = t(lang, "quality_3_request") + t(lang, "reg_skip_hint")
+            mid2 = await show_registration_step(
+                bot, msg.chat.id, last_msg_id, "quality_3",
+                text, get_skip_and_cancel_keyboard(lang), lang=lang,
+            )
+            if mid2 is not None:
+                await state.update_data(last_bot_message_id=mid2)
+            elif last_msg_id:
+                try:
+                    await bot.edit_message_text(
+                        chat_id=msg.chat.id, message_id=last_msg_id,
+                        text=text, reply_markup=get_skip_and_cancel_keyboard(lang),
+                    )
+                except Exception:
+                    sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(last_bot_message_id=sent.message_id)
+            else:
+                sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(last_bot_message_id=sent.message_id)
+            await state.set_state(RegistrationStates.waiting_for_quality_3)
+        else:
+            short_text = t(lang, "short_description_request") + t(lang, "reg_skip_hint")
+            mid2 = await show_registration_step(
+                bot, msg.chat.id, last_msg_id, "short_desc",
+                short_text, get_skip_and_cancel_keyboard(lang), lang=lang,
+            )
+            if mid2 is not None:
+                await state.update_data(last_bot_message_id=mid2)
+            elif last_msg_id:
+                try:
+                    await bot.edit_message_text(
+                        chat_id=msg.chat.id, message_id=last_msg_id,
+                        text=short_text, reply_markup=get_skip_and_cancel_keyboard(lang),
+                    )
+                except Exception:
+                    sent = await msg.answer(short_text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(last_bot_message_id=sent.message_id)
+            else:
+                sent = await msg.answer(short_text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(last_bot_message_id=sent.message_id)
+            await state.set_state(RegistrationStates.waiting_for_short_description)
+    except Exception as e:
+        logger.error(f"Ошибка в reg_quality_emoji_selected: {e}", exc_info=True)
+        await handle_error(None, e, "reg_quality_emoji_selected")
 
 
 @router.callback_query(F.data == "cancel")

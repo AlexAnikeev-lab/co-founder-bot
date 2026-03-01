@@ -1,5 +1,5 @@
-# Сгенерировано скриптом upload_photos_for_file_id.py. Не редактируй вручную.
-# Чтобы обновить — заново запусти скрипт.
+# Сгенерировано/обновлено скриптами upload_photos_for_file_id.py и upload_photos_for_file_id_en.py.
+# Не редактируй вручную. Чтобы обновить — заново запусти нужный скрипт.
 
 REGISTRATION_PHOTO_FILE_IDS = {
     "welcome_1": "AgACAgIAAxkDAAIH5WmSESvatemjeToVdq8sWuqqJ9MfAAKyGGsbaPyRSBBXZigVOqzoAQADAgADdwADOgQ",
@@ -16,4 +16,21 @@ REGISTRATION_PHOTO_FILE_IDS = {
     "quality_2": "AgACAgIAAxkDAAIH-2mSE2hC1Chjko2VRTF8ZOJrTFEtAAJwF2sbJQaQSIxigOq26Xo7AQADAgADdwADOgQ",
     "quality_3": "AgACAgIAAxkDAAIH_GmSE21YhBIlNYDkDqg7iKl5dqILAAJyF2sbJQaQSM1aMIi3DZPyAQADAgADdwADOgQ",
     "success": "AgACAgIAAxkDAAIH_2mSE3-d9JFt5cYumgYORJzKD1m9AAJ2F2sbJQaQSCxguKV6waacAQADAgADdwADOgQ",
+}
+
+REGISTRATION_PHOTO_FILE_IDS_EN = {
+    "welcome_1": "AgACAgIAAxkDAAIK02mcVmcrtYZiZ0nX2cVUo3sygcAVAAIYGWsb-OnhSNfyf4qc87SVAQADAgADdwADOgQ",
+    "welcome_2": "AgACAgIAAxkDAAIK1WmcVsAzdwaypcCvcaGQvKxYdAWPAAIgGWsb-OnhSEaiK-xCbhy2AQADAgADdwADOgQ",
+    "age": "AgACAgIAAxkDAAIK1mmcVtPmoFJXdFiBKf1Go4Xnn1PQAAIiGWsb-OnhSM8y8nYEVrzwAQADAgADdwADOgQ",
+    "legal": "AgACAgIAAxkDAAIK2GmcVtXTlaqbk_8U8rtUYSYJ9_oVAAIkGWsb-OnhSHOC0aA4GGM6AQADAgADdwADOgQ",
+    "learning_mode": "AgACAgIAAxkDAAIK2GmcVtXTlaqbk_8U8rtUYSYJ9_oVAAIkGWsb-OnhSHOC0aA4GGM6AQADAgADdwADOgQ",
+    "telegram": "AgACAgIAAxkDAAIK2WmcVta5QxXMZEzbV9ixDfdoI6qHAAIlGWsb-OnhSBdSpzn_Bj9CAQADAgADdwADOgQ",
+    "name": "AgACAgIAAxkDAAIK3GmcVtlt_HQ9HRhxgeaiD7tDa5kgAAIoGWsb-OnhSIrV0H_WU8JEAQADAgADdwADOgQ",
+    "photo": "AgACAgIAAxkDAAIK3WmcVtr_WxtzAa0pGWdz2dg9YaWLAAIpGWsb-OnhSOD0Uu9AXFWoAQADAgADdwADOgQ",
+    "quality_1": "AgACAgIAAxkDAAIK0mmcVkXlLkZcOLL6qwrQ4q6hapJpAAIVGWsb-OnhSPNyUVP-7qEGAQADAgADdwADOgQ",
+    "quality_2": "AgACAgIAAxkDAAIK5mmcXqjFBoBm94XkKwXvwhiOUCLMAAKoGWsb-OnhSPpfGe7FPbfbAQADAgADdwADOgQ",
+    "quality_3": "AgACAgIAAxkDAAIK12mcVtQoa-bKC2FbWcQkdPOWOaUKAAIjGWsb-OnhSETf1PU_nOjWAQADAgADdwADOgQ",
+    "short_desc": "AgACAgIAAxkDAAIK2mmcVtcP_4v__8lU3KBCuwRIqif1AAImGWsb-OnhSNLMMs6i88qjAQADAgADdwADOgQ",
+    "full_desc": "AgACAgIAAxkDAAIK22mcVtiDjn3Ynyj4DTBC97cqPA4qAAInGWsb-OnhSJsr9S0Ew_beAQADAgADdwADOgQ",
+    "success": "AgACAgIAAxkDAAIK6mmcXqp_rRcXIgvORZ7f6xAUMEDlAAKpGWsb-OnhSIhlMCTy9ZsuAQADAgADdwADOgQ",
 }

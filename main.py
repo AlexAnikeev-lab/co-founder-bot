@@ -54,8 +54,17 @@ async def main() -> None:
     
     # Запуск бота
     logger.info("Бот запущен")
+    if config.PAYMENT_GROUP_ID is not None:
+        logger.info("Группа оплаты включена: PAYMENT_GROUP_ID=%s (сообщения с кодами будут обрабатываться)", config.PAYMENT_GROUP_ID)
+    else:
+        logger.info("PAYMENT_GROUP_ID не задан — проверка кодов в группе отключена")
     try:
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        # Явно включаем message и edited_message, чтобы апдейты из группы оплаты не терялись
+        allowed = list(dp.resolve_used_update_types())
+        for ut in ("message", "edited_message"):
+            if ut not in allowed:
+                allowed.append(ut)
+        await dp.start_polling(bot, allowed_updates=allowed)
     except Exception as e:
         logger.error(f"Ошибка при запуске бота: {e}", exc_info=True)
     finally:

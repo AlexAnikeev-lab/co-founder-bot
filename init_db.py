@@ -10,6 +10,7 @@ from repositories.user_repository import User
 from repositories.test_repository import TestResult
 from repositories.swipe_repository import Swipe
 from repositories.admin_archive_repository import AdminUserArchive
+from repositories.subscription_repository import SubscriptionPendingCode
 
 logger = logging.getLogger(__name__)
 

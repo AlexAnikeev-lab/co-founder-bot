@@ -1,7 +1,9 @@
 """
 Запись подробного сравнения при совпадении (взаимный лайк) для проверки логики совместимости.
+Запись в файл выполняется в потоке (run_in_executor), чтобы не блокировать event loop при нагрузке.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Dict
@@ -28,6 +30,12 @@ def _format_details(details: Dict[str, Any], indent: str = "  ") -> str:
     return "\n".join(lines) if lines else ""
 
 
+def _write_match_log(content: str) -> None:
+    """Синхронная запись в файл (вызывается из executor)."""
+    with open(MATCH_COMPARISON_FILE, "a", encoding="utf-8") as f:
+        f.write(content)
+
+
 def log_match_comparison(
     user_a_id: int,
     user_a_name: str,
@@ -48,20 +56,28 @@ def log_match_comparison(
         details: словарь из CompatibilityService.calculate_compatibility_detailed
     """
     try:
-        with open(MATCH_COMPARISON_FILE, "a", encoding="utf-8") as f:
-            f.write("\n")
-            f.write("=" * 80 + "\n")
-            f.write(f"СОВПАДЕНИЕ — {datetime.utcnow().isoformat()}Z\n")
-            f.write("=" * 80 + "\n")
-            f.write(f"Пользователь A: id={user_a_id}, имя={user_a_name}\n")
-            f.write(f"Пользователь B: id={user_b_id}, имя={user_b_name}\n")
-            f.write(f"Итоговая совместимость: {final_score}%\n")
-            f.write("\n--- Профили (баллы) ---\n")
-            f.write("Profile A: " + str(details.get("profile_a", {})) + "\n")
-            f.write("Profile B: " + str(details.get("profile_b", {})) + "\n")
-            f.write("\n--- Детали расчёта ---\n")
-            f.write(_format_details({k: v for k, v in details.items() if k not in ("profile_a", "profile_b")}))
-            f.write("\n")
-            f.write("=" * 80 + "\n")
+        content = "\n".join([
+            "",
+            "=" * 80,
+            f"СОВПАДЕНИЕ — {datetime.utcnow().isoformat()}Z",
+            "=" * 80,
+            f"Пользователь A: id={user_a_id}, имя={user_a_name}",
+            f"Пользователь B: id={user_b_id}, имя={user_b_name}",
+            f"Итоговая совместимость: {final_score}%",
+            "",
+            "--- Профили (баллы) ---",
+            "Profile A: " + str(details.get("profile_a", {})),
+            "Profile B: " + str(details.get("profile_b", {})),
+            "",
+            "--- Детали расчёта ---",
+            _format_details({k: v for k, v in details.items() if k not in ("profile_a", "profile_b")}),
+            "",
+            "=" * 80,
+        ]) + "\n"
+        try:
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(None, _write_match_log, content)
+        except RuntimeError:
+            _write_match_log(content)
     except Exception as e:
         logger.error("Ошибка записи в match_comparisons.log: %s", e, exc_info=True)

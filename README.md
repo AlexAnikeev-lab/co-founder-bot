@@ -12,7 +12,7 @@ Co-founder Bot помогает пользователям находить ед
 - 📚 Обучающий режим для пользователей младше 14 лет
 - 📝 Система тестов для оценки совместимости
 - 💕 Поиск партнёров и мэтчинг
-- ⭐ Премиум функционал
+- ⭐ **Подписка (Co-founder Subscription):** супер-лайк 🔥 (мгновенный контакт), 1 лайк в неделю, 5 избранных. Оплата по коду в группу (55 звёзд).
 - 👤 Управление профилем
 - 🔐 Админ-панель: статистика и очистка лайков/дизлайков (команда `/admin`, только для пользователей из `ADMIN_ID`)
 
@@ -43,12 +43,16 @@ Co-founder-new/
 │   ├── learning.py       # Обучающий режим
 │   ├── common.py         # Общие обработчики (меню, навигация)
 │   ├── swipe.py          # Свайпы (поиск партнёров)
+│   ├── subscription.py   # Подписка (оплата по коду в группу)
 │   └── admin.py          # Админ-панель (статистика, очистка)
 │
 ├── keyboards/            # Клавиатуры бота
 │   ├── __init__.py
 │   ├── common.py         # Общие клавиатуры
 │   ├── menu.py           # Меню и навигация
+│   ├── profile.py        # Клавиатуры профиля
+│   ├── subscription.py   # Клавиатуры подписки
+│   ├── swipe.py          # Клавиатуры свайпов
 │   └── test.py           # Клавиатуры для тестов
 │
 ├── middlewares/          # Middleware
@@ -62,7 +66,9 @@ Co-founder-new/
 ├── repositories/         # Работа с базой данных
 │   ├── __init__.py
 │   ├── database.py       # Настройка БД
-│   └── user_repository.py # Репозиторий пользователей
+│   ├── user_repository.py      # Репозиторий пользователей
+│   ├── swipe_repository.py     # Свайпы (лайки, избранное)
+│   └── subscription_repository.py # Коды оплаты подписки
 │
 ├── states/               # FSM состояния
 │   ├── __init__.py
@@ -132,6 +138,13 @@ ADMIN_ID=your_admin_id_here
 DATABASE_URL=sqlite+aiosqlite:///cofounder.db
 MIN_AGE_FULL=14
 LOG_LEVEL=INFO
+
+# Подписка (оплата по коду в группу)
+SUBSCRIPTION_STARS_PRICE=55
+PAYMENT_GROUP_ID=          # ID группы, куда пользователь отправляет код (число)
+PAYMENT_GROUP_LINK=         # Ссылка на группу (t.me/... или invite)
+PAYMENT_CODE_BASE=S4K3FF   # Префикс кода (код = PAYMENT_CODE_BASE_<telegram_id>)
+BUY_STARS_BOT_URL=https://t.me/...  # Ссылка на бота для покупки звёзд (гиперссылка «ссылка»)
 ```
 
 ### 5. Установка зависимостей

@@ -5,13 +5,14 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from keyboards.common import get_back_button, get_main_menu_button
+from texts.i18n import t
 
 
 def get_post_registration_offer_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     """Клавиатура после регистрации (язык: ru/en)."""
     builder = InlineKeyboardBuilder()
     builder.add(InlineKeyboardButton(
-        text="📋 Пройти основной тест",
+        text=t(lang, "btn_pass_main_test"),
         callback_data="start_test:main"
     ))
     builder.add(get_main_menu_button(lang))
@@ -20,39 +21,39 @@ def get_post_registration_offer_keyboard(lang: str = "ru") -> InlineKeyboardMark
 
 
 def get_test_list_keyboard(main_test_completed: bool = False, lang: str = "ru") -> InlineKeyboardMarkup:
-    """Список доступных тестов. Основной тест скрыт, если уже пройден (перепройти нельзя)."""
+    """Список доступных тестов (язык ru/en). Основной тест скрыт, если уже пройден."""
     builder = InlineKeyboardBuilder()
     if not main_test_completed:
         builder.add(InlineKeyboardButton(
-            text="📋 Основной тест (10 вопросов)",
+            text=t(lang, "tests_main_btn"),
             callback_data="test:main"
         ))
     builder.add(InlineKeyboardButton(
-        text="🎭 Ролевые предпочтения",
+        text=t(lang, "tests_roles_btn"),
         callback_data="test:roles_extra"
     ))
     builder.add(InlineKeyboardButton(
-        text="⚖️ Ценности и этика",
+        text=t(lang, "tests_ethics_btn"),
         callback_data="test:ethics_extra"
     ))
     builder.add(InlineKeyboardButton(
-        text="🎯 Цели и мотивация",
+        text=t(lang, "tests_goals_btn"),
         callback_data="test:goals_extra"
     ))
     builder.add(InlineKeyboardButton(
-        text="🎲 Толерантность к риску",
+        text=t(lang, "tests_risk_btn"),
         callback_data="test:risk_extra"
     ))
     builder.add(InlineKeyboardButton(
-        text="🤔 Стиль принятия решений",
+        text=t(lang, "tests_decision_btn"),
         callback_data="test:decision_extra"
     ))
     builder.add(InlineKeyboardButton(
-        text="💬 Стиль коммуникации",
+        text=t(lang, "tests_comm_btn"),
         callback_data="test:comm_extra"
     ))
     builder.add(InlineKeyboardButton(
-        text="ℹ️ О тестах",
+        text=t(lang, "tests_about_btn"),
         callback_data="about_tests"
     ))
     builder.add(get_back_button("profile", lang))
@@ -61,11 +62,10 @@ def get_test_list_keyboard(main_test_completed: bool = False, lang: str = "ru") 
 
 
 def get_test_info_keyboard(test_type: str, lang: str = "ru") -> InlineKeyboardMarkup:
-    """Информация о тесте с кнопкой начала"""
+    """Информация о тесте с кнопкой начала (язык ru/en)."""
     builder = InlineKeyboardBuilder()
-    
     builder.add(InlineKeyboardButton(
-        text="▶️ Начать тест",
+        text=t(lang, "test_start_btn"),
         callback_data=f"start_test:{test_type}"
     ))
     builder.add(get_back_button("tests", lang))
@@ -131,12 +131,12 @@ def get_test_progress_keyboard(
     
     if is_last:
         builder.add(InlineKeyboardButton(
-            text="✅ Завершить тест",
+            text=t(lang, "test_finish_btn"),
             callback_data=f"finish_test:{test_type}"
         ))
     else:
         builder.add(InlineKeyboardButton(
-            text=f"➡️ Следующий вопрос ({current_question + 1}/{total_questions})",
+            text=f"{t(lang, 'test_next_question_btn')} ({current_question + 1}/{total_questions})",
             callback_data=f"next_question:{test_type}:{current_question + 1}"
         ))
     
@@ -146,15 +146,14 @@ def get_test_progress_keyboard(
 
 
 def get_test_results_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
-    """Клавиатура после завершения теста"""
+    """Клавиатура после завершения теста (язык ru/en)."""
     builder = InlineKeyboardBuilder()
-    
     builder.add(InlineKeyboardButton(
-        text="📊 Мой профиль",
+        text=t(lang, "btn_my_profile"),
         callback_data="profile"
     ))
     builder.add(InlineKeyboardButton(
-        text="📝 Пройти другие тесты",
+        text=t(lang, "btn_other_tests"),
         callback_data="tests"
     ))
     builder.add(get_back_button("main_menu", lang))

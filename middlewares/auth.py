@@ -2,6 +2,7 @@
 Middleware для проверки авторизации пользователя
 """
 
+from datetime import datetime
 from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Message, CallbackQuery
@@ -28,6 +29,13 @@ class AuthMiddleware(BaseMiddleware):
             async for session in get_session():
                 user = await UserRepository.get_by_telegram_id(session, user_id)
                 data["user"] = user
+                if user and user.is_registered:
+                    try:
+                        await UserRepository.update(
+                            session, user, last_seen_at=datetime.utcnow()
+                        )
+                    except Exception:
+                        pass
                 break
         
         return await handler(event, data)

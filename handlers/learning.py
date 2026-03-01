@@ -86,22 +86,15 @@ async def show_learning_menu(event: Message | CallbackQuery, state: FSMContext) 
             except Exception:
                 pass
             data = await state.get_data()
-            mid = data.get("last_bot_message_id")
-            if mid:
-                try:
-                    await message.bot.edit_message_text(
-                        chat_id=message.chat.id,
-                        message_id=mid,
-                        text=text,
-                        reply_markup=reply_markup,
-                    )
-                    await state.update_data(last_bot_message_id=mid)
-                    return
-                except Exception:
+            chat_id = message.chat.id
+            bot = message.bot
+            for mid in (data.get("last_bot_message_id"), data.get("profile_section_message_id")):
+                if mid:
                     try:
-                        await message.bot.delete_message(chat_id=message.chat.id, message_id=mid)
+                        await bot.delete_message(chat_id=chat_id, message_id=mid)
                     except Exception:
                         pass
+            await state.update_data(profile_section_message_id=None)
             sent = await message.answer(text, reply_markup=reply_markup)
             await state.update_data(last_bot_message_id=sent.message_id)
     except Exception as e:

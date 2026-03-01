@@ -122,14 +122,23 @@ async def cmd_back_from_section(message: Message, state: FSMContext) -> None:
             await _edit_or_send(message, state, text, get_people_keyboard(lang), send_fallback=True)
             return
 
-        await state.update_data(in_profile=False, profile_screen=None, last_bot_message_id=None)
+        chat_id = message.chat.id
+        bot = message.bot
+        for mid in (data.get("last_bot_message_id"), data.get("profile_section_message_id")):
+            if mid:
+                try:
+                    await bot.delete_message(chat_id=chat_id, message_id=mid)
+                except Exception:
+                    pass
+        await state.update_data(in_profile=False, profile_screen=None, last_bot_message_id=None, profile_section_message_id=None)
         is_minor = False
         async for session in get_session():
             user = await UserRepository.get_by_telegram_id(session, user_id)
             if user:
                 is_minor = user.is_minor
             break
-        await message.answer(t(lang, "choose_menu_item"), reply_markup=get_main_menu_keyboard(is_minor, lang))
+        sent = await message.answer(t(lang, "choose_menu_item"), reply_markup=get_main_menu_keyboard(is_minor, lang))
+        await state.update_data(last_bot_message_id=sent.message_id)
         return
 
     is_minor = False
@@ -144,12 +153,16 @@ async def cmd_back_from_section(message: Message, state: FSMContext) -> None:
 @router.message(F.text.in_(text_options("menu_main")))
 @router.callback_query(F.data == "main_menu")
 async def cmd_main_menu(event: Message | CallbackQuery, state: FSMContext) -> None:
-    """Обработка кнопки Главное меню (ru/en)."""
+    """Обработка кнопки Главное меню (ru/en). Удаляем предыдущий экран (профиль, «Выберите раздел» и т.д.)."""
     try:
         if isinstance(event, CallbackQuery):
             await event.answer()
             message = event.message
             user_id = event.from_user.id
+            try:
+                await message.delete()
+            except Exception:
+                pass
         else:
             message = event
             user_id = event.from_user.id
@@ -157,6 +170,15 @@ async def cmd_main_menu(event: Message | CallbackQuery, state: FSMContext) -> No
                 await message.delete()
             except Exception:
                 pass
+        data = await state.get_data()
+        chat_id = message.chat.id
+        bot = message.bot
+        for mid in (data.get("last_bot_message_id"), data.get("profile_section_message_id")):
+            if mid:
+                try:
+                    await bot.delete_message(chat_id=chat_id, message_id=mid)
+                except Exception:
+                    pass
         await state.clear()
 
         lang = "ru"
@@ -195,12 +217,16 @@ async def cmd_back_to_start(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(F.text.in_(text_options("menu_info")))
 @router.callback_query(F.data == "info")
-async def cmd_info(event: Message | CallbackQuery) -> None:
-    """Информация о боте (ru/en)."""
+async def cmd_info(event: Message | CallbackQuery, state: FSMContext) -> None:
+    """Информация о боте (ru/en). При переходе удаляем предыдущее меню."""
     if isinstance(event, CallbackQuery):
         await event.answer()
         message = event.message
         user_id = event.from_user.id
+        try:
+            await message.delete()
+        except Exception:
+            pass
     else:
         message = event
         user_id = event.from_user.id
@@ -208,6 +234,13 @@ async def cmd_info(event: Message | CallbackQuery) -> None:
             await message.delete()
         except Exception:
             pass
+        data = await state.get_data()
+        for mid in (data.get("last_bot_message_id"), data.get("profile_section_message_id")):
+            if mid:
+                try:
+                    await message.bot.delete_message(chat_id=message.chat.id, message_id=mid)
+                except Exception:
+                    pass
 
     lang, is_minor = "ru", False
     async for session in get_session():
@@ -218,7 +251,8 @@ async def cmd_info(event: Message | CallbackQuery) -> None:
         break
 
     text = t(lang, "info_title") + "\n\n" + t(lang, "info_text")
-    await message.answer(text, reply_markup=get_main_menu_keyboard(is_minor=is_minor, lang=lang))
+    sent = await message.answer(text, reply_markup=get_main_menu_keyboard(is_minor=is_minor, lang=lang))
+    await state.update_data(last_bot_message_id=sent.message_id)
 
 
 @router.callback_query(F.data == "bot_instruction")
@@ -238,29 +272,57 @@ async def cmd_bot_instruction(callback: CallbackQuery) -> None:
 
 @router.message(F.text.in_(text_options("menu_premium")))
 @router.callback_query(F.data == "premium")
-async def cmd_premium(event: Message | CallbackQuery) -> None:
-    """Co-founder Premium (ru/en)."""
+async def cmd_premium(event: Message | CallbackQuery, state: FSMContext) -> None:
+    """Co-founder Subscription: экран преимуществ, кнопки Оплатить / Вернуться в профиль."""
     if isinstance(event, CallbackQuery):
         await event.answer()
         message = event.message
         user_id = event.from_user.id
-    else:
-        message = event
         try:
             await message.delete()
         except Exception:
             pass
+    else:
+        message = event
         user_id = event.from_user.id
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        data = await state.get_data()
+        for mid in (data.get("last_bot_message_id"), data.get("profile_section_message_id")):
+            if mid:
+                try:
+                    await message.bot.delete_message(chat_id=message.chat.id, message_id=mid)
+                except Exception:
+                    pass
 
-    lang, is_minor = "ru", False
+    from keyboards.subscription import get_subscription_benefits_keyboard
+    from config import Config
+    config = Config()
+
+    lang, is_minor, has_sub = "ru", False, False
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, user_id)
         if user:
             lang = getattr(user, "language", None) or "ru"
             is_minor = user.is_minor
+            has_sub = getattr(user, "subscription_active", False)
         break
-    text = t(lang, "premium_title") + "\n\n" + t(lang, "premium_text")
-    await message.answer(text, reply_markup=get_main_menu_keyboard(is_minor=is_minor, lang=lang))
+
+    if has_sub:
+        text = t(lang, "subscription_already")
+        from keyboards.subscription import get_subscription_congrats_keyboard
+        kb = get_subscription_congrats_keyboard(lang)
+    else:
+        text = t(lang, "subscription_benefits_title").format(
+            price=config.SUBSCRIPTION_STARS_PRICE,
+            url=config.BUY_STARS_BOT_URL,
+        )
+        kb = get_subscription_benefits_keyboard(lang)
+
+    sent = await message.answer(text, reply_markup=kb)
+    await state.update_data(last_bot_message_id=sent.message_id)
 
 
 def register_handlers(dp) -> None:

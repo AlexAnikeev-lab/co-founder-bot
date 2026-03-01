@@ -143,6 +143,25 @@ def validate_qualities(text: str) -> bool:
     return True
 
 
+# Диапазоны Unicode для эмодзи (упрощённо: символы-картинки)
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F300-\U0001F9FF"  # Misc Symbols, Emoticons, etc.
+    "\U00002600-\U000026FF"  # Misc symbols
+    "\U00002700-\U000027BF"
+    "\U0001F600-\U0001F64F"
+    "\U0001F1E0-\U0001F1FF"  # Flags
+    "\U0001F900-\U0001F9FF"
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def text_contains_emoji(text: str) -> bool:
+    """Проверка, есть ли в тексте эмодзи (нельзя вводить в текст качества — смайлик выбирается отдельно)."""
+    return bool(text and _EMOJI_PATTERN.search(text))
+
+
 def validate_single_quality(text: str) -> bool:
     """Валидация одного качества (2–50 символов)"""
     if not text or not text.strip():

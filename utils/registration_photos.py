@@ -10,12 +10,12 @@ from aiogram.types import FSInputFile, InputMediaPhoto, InlineKeyboardMarkup
 from config import get_registration_photo_path, get_registration_photo_file_id
 
 
-def _photo_input(step_key: str):
-    """Фото для отправки: file_id (строка) или FSInputFile(path)."""
-    file_id = get_registration_photo_file_id(step_key)
+def _photo_input(step_key: str, lang: str = "ru"):
+    """Фото для отправки: file_id (строка) или FSInputFile(path). По языку выбирается папка (ru → photos, en → photos_engls)."""
+    file_id = get_registration_photo_file_id(step_key, lang=lang)
     if file_id:
         return file_id
-    path = get_registration_photo_path(step_key)
+    path = get_registration_photo_path(step_key, lang=lang)
     if path:
         return FSInputFile(path)
     return None
@@ -28,12 +28,13 @@ async def show_registration_step(
     step_key: str,
     caption: str,
     reply_markup: Optional[InlineKeyboardMarkup] = None,
+    lang: str = "ru",
 ) -> Optional[int]:
     """
-    Показать шаг с фото (по file_id или по файлу).
+    Показать шаг с фото (по file_id или по файлу). lang задаёт папку: ru → photos, en → photos_engls.
     Возвращает message_id или None при fallback на текст.
     """
-    photo = _photo_input(step_key)
+    photo = _photo_input(step_key, lang=lang)
     if not photo:
         return None
 

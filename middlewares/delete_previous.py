@@ -5,7 +5,7 @@
 
 import logging
 from contextvars import ContextVar
-from typing import Callable, Dict, Any, Awaitable, List
+from typing import Any, Awaitable, Callable, Dict, List
 
 from aiogram import Bot, BaseMiddleware
 from aiogram.types import TelegramObject, Message, CallbackQuery
@@ -53,13 +53,19 @@ class DeletePreviousMiddleware(BaseMiddleware):
 class BotDeletePrevious(Bot):
     """Бот, перед каждой отправкой удаляющий предыдущие сообщения в этом чате."""
 
-    async def send_message(self, chat_id: int, **kwargs) -> Message:
+    async def send_message(self, chat_id: int, text: str = None, **kwargs) -> Message:
+        """Поддержка вызова как send_message(chat_id, text) и send_message(chat_id=..., text=...)."""
+        if text is not None:
+            kwargs["text"] = text
         await _delete_previous_messages(self, chat_id)
         msg = await super().send_message(chat_id, **kwargs)
         _append_message_id(chat_id, msg.message_id)
         return msg
 
-    async def send_photo(self, chat_id: int, **kwargs) -> Message:
+    async def send_photo(self, chat_id: int, photo: Any = None, **kwargs) -> Message:
+        """Поддержка вызова как send_photo(chat_id, photo) и send_photo(chat_id=..., photo=...)."""
+        if photo is not None:
+            kwargs["photo"] = photo
         await _delete_previous_messages(self, chat_id)
         msg = await super().send_photo(chat_id, **kwargs)
         _append_message_id(chat_id, msg.message_id)
