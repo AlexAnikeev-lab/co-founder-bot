@@ -233,6 +233,25 @@ async def get_next_user_for_swipe(
     )
 
 
+async def _get_likes_left_text(
+    session: AsyncSession,
+    user_id: int,
+    lang: str,
+) -> str:
+    """
+    Текст про оставшиеся лайки на неделю для пользователя.
+    Учитывает глобальный лимит и количество лайков за последние 7 дней.
+    """
+    limit = get_likes_per_week_limit()
+    if limit <= 0:
+        return t(lang, "likes_unlimited_info")
+    count_likes = await SwipeRepository.count_in_last_7_days(session, user_id, "like")
+    remaining = max(0, limit - count_likes)
+    if remaining > 0:
+        return t(lang, "likes_left_info", remaining=remaining, limit=limit)
+    return t(lang, "likes_no_left_info", limit=limit)
+
+
 async def _get_next_user_with_excluded(
     session,
     current_user_id: int,
@@ -542,8 +561,10 @@ async def cmd_dating(
 
     has_super_like = getattr(user, "subscription_active", False) and not getattr(user, "super_like_used", False)
     await state.update_data(in_partners=True)
+
+    likes_text = await _get_likes_left_text(session, user_id, lang)
     await message.answer(
-        f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_intro')}",
+        f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_intro')}\n\n{likes_text}",
         reply_markup=get_partners_reply_keyboard(lang, has_super_like=has_super_like),
     )
     await show_next_profile(session, message, user_id, user, state=state, in_partners=True)
@@ -681,6 +702,11 @@ async def handle_partners_reply_action(
                     )
                 except Exception as e:
                     logger.error("Ошибка отправки уведомления о мэтче (reply): %s", e)
+
+        # Показать информацию об оставшихся лайках после успешного лайка
+        if action == "like":
+            likes_text = await _get_likes_left_text(session, swiper_user_id, lang)
+            await message.answer(likes_text)
 
         current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
         if current_user:
@@ -952,6 +978,8 @@ async def handle_swipe_from_notification(callback: CallbackQuery) -> None:
                         t(lang, "like_sent_message"),
                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[get_back_button("main_menu", lang)]]),
                     )
+                    likes_text = await _get_likes_left_text(session, swiper_user_id, lang)
+                    await callback.message.answer(likes_text)
             else:
                 await callback.message.answer(
                     t(lang, "swipe_action_done"),
@@ -1223,6 +1251,9 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
                             break
                     break
                 # Не мэтч — показываем следующую анкету как обычно
+            if action == "like":
+                likes_text = await _get_likes_left_text(session, swiper_user_id, lang)
+                await callback.message.answer(likes_text)
             if action in ("like", "dislike") and in_favorites:
                 await _show_next_favorite_or_empty(callback, state, lang, send_new_message=False)
                 break

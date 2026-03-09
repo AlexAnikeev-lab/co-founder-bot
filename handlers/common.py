@@ -12,6 +12,8 @@ from keyboards.menu import get_people_keyboard
 from keyboards.profile import get_edit_profile_keyboard
 from repositories.user_repository import UserRepository
 from repositories.database import get_session
+from repositories.swipe_repository import SwipeRepository
+from services.settings import get_likes_per_week_limit
 from states.registration import ProfileEditStates
 from texts.i18n import t, text_options
 from utils.errors import handle_error
@@ -80,13 +82,24 @@ async def cmd_back_from_section(message: Message, state: FSMContext) -> None:
     if data.get("in_partners"):
         await state.update_data(in_partners=False, current_partner_id=None)
         is_minor = False
+        likes_text = ""
         async for session in get_session():
             user = await UserRepository.get_by_telegram_id(session, user_id)
             if user:
                 is_minor = user.is_minor
+                limit = get_likes_per_week_limit()
+                if limit <= 0:
+                    likes_text = "\n\n" + t(lang, "likes_unlimited_info")
+                else:
+                    count_likes = await SwipeRepository.count_in_last_7_days(session, user_id, "like")
+                    remaining = max(0, limit - count_likes)
+                    if remaining > 0:
+                        likes_text = "\n\n" + t(lang, "likes_left_info", remaining=remaining, limit=limit)
+                    else:
+                        likes_text = "\n\n" + t(lang, "likes_no_left_info", limit=limit)
             break
         await message.answer(
-            t(lang, "back_from_partners"),
+            t(lang, "back_from_partners") + likes_text,
             reply_markup=get_main_menu_keyboard(is_minor, lang),
         )
         return
