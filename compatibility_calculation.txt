@@ -2176,3 +2176,889 @@ E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.1
 E4 — штрафы (red flags): 0
 E5 — итог (base - penalty): 88%
 ================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T15:15:01.246715Z
+================================================================================
+Кому показывают (viewer): id=1669052279, имя=Виктор Баринов
+Кого показывают (shown):   id=1424276927, имя=Александр Иванов
+Итоговый процент совместимости: 82%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 100, 'goals_score': 38, 'risk_score': 20, 'decision_score': 50, 'comm_score': 42}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 55, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 83
+  score_risk: 60
+  score_decision: 100
+  score_comm: 90
+  diffs: {'ethics': 25, 'goals': 17, 'risk': 40, 'decision': 0, 'comm': 10}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 50
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 82
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 82%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T15:15:12.020096Z
+================================================================================
+Кому показывают (viewer): id=1669052279, имя=Виктор Баринов
+Кого показывают (shown):   id=1385108695, имя=Арих Павел Андреевич
+Итоговый процент совместимости: 64%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 100, 'goals_score': 38, 'risk_score': 20, 'decision_score': 50, 'comm_score': 42}
+Profile shown:   {'hustler_percent': 100, 'hacker_percent': 0, 'hipster_percent': 0, 'ethics_score': 50, 'goals_score': 65, 'risk_score': 60, 'decision_score': 55, 'comm_score': 82}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 50
+  score_goals: 73
+  score_risk: 60
+  score_decision: 95
+  score_comm: 60
+  diffs: {'ethics': 50, 'goals': 27, 'risk': 40, 'decision': 5, 'comm': 40}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 100
+  d_k: 0
+  d_p: 100
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 72
+E4 — штрафы (red flags): 8
+  - RF1 Ethics: diff>=40 → -8
+E5 — итог (base - penalty): 64%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ — 2026-03-07T15:15:56.090089Z
+================================================================================
+Кому показывают (viewer): id=1669052279
+Кого показывают (shown):   id=7485051391
+Показанный процент совместимости: 0%
+Примечание: нет полных профилей теста для расчёта
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:20:23.151516Z
+================================================================================
+Кому показывают (viewer): id=8413274422, имя=Арих аиаро
+Кого показывают (shown):   id=7485051391, имя=ldksas
+Итоговый процент совместимости: 93%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 25, 'goals_score': 50, 'risk_score': 60, 'decision_score': 55, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 98
+  score_risk: 100
+  score_decision: 95
+  score_comm: 100
+  diffs: {'ethics': 25, 'goals': 2, 'risk': 0, 'decision': 5, 'comm': 0}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 100
+  d_p: 100
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 93
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 93%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:20:23.157254Z
+================================================================================
+Кому показывают (viewer): id=8216024262, имя=Шгкп тмтал
+Кого показывают (shown):   id=1424276927, имя=Александр Иванов
+Итоговый процент совместимости: 87%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 100, 'goals_score': 45, 'risk_score': 60, 'decision_score': 55, 'comm_score': 32}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 55, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 90
+  score_risk: 100
+  score_decision: 95
+  score_comm: 80
+  diffs: {'ethics': 25, 'goals': 10, 'risk': 0, 'decision': 5, 'comm': 20}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 50
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 87
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 87%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:20:31.551611Z
+================================================================================
+Кому показывают (viewer): id=8413274422, имя=Арих аиаро
+Кого показывают (shown):   id=1424276927, имя=Александр Иванов
+Итоговый процент совместимости: 91%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 55, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 93
+  score_risk: 100
+  score_decision: 100
+  score_comm: 100
+  diffs: {'ethics': 25, 'goals': 7, 'risk': 0, 'decision': 0, 'comm': 0}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 50
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 91
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 91%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:20:32.849183Z
+================================================================================
+Кому показывают (viewer): id=8216024262, имя=Шгкп тмтал
+Кого показывают (shown):   id=7105084267, имя=ldksas
+Итоговый процент совместимости: 87%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 100, 'goals_score': 45, 'risk_score': 60, 'decision_score': 55, 'comm_score': 32}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 32, 'risk_score': 60, 'decision_score': 54, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 87
+  score_risk: 100
+  score_decision: 99
+  score_comm: 80
+  diffs: {'ethics': 25, 'goals': 13, 'risk': 0, 'decision': 1, 'comm': 20}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 50
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 87
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 87%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:20:36.002857Z
+================================================================================
+Кому показывают (viewer): id=8413274422, имя=Арих аиаро
+Кого показывают (shown):   id=1424276927, имя=Александр Иванов
+Итоговый процент совместимости: 91%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 55, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 93
+  score_risk: 100
+  score_decision: 100
+  score_comm: 100
+  diffs: {'ethics': 25, 'goals': 7, 'risk': 0, 'decision': 0, 'comm': 0}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 50
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 91
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 91%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:20:39.370106Z
+================================================================================
+Кому показывают (viewer): id=8216024262, имя=Шгкп тмтал
+Кого показывают (shown):   id=7105084267, имя=ldksas
+Итоговый процент совместимости: 87%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 100, 'goals_score': 45, 'risk_score': 60, 'decision_score': 55, 'comm_score': 32}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 32, 'risk_score': 60, 'decision_score': 54, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 87
+  score_risk: 100
+  score_decision: 99
+  score_comm: 80
+  diffs: {'ethics': 25, 'goals': 13, 'risk': 0, 'decision': 1, 'comm': 20}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 50
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 87
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 87%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:20:49.316747Z
+================================================================================
+Кому показывают (viewer): id=7485051391, имя=😶‍🌫️😶‍🌫️😶‍🌫️
+Кого показывают (shown):   id=8413274422, имя=Арих аиаро
+Итоговый процент совместимости: 93%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 25, 'goals_score': 50, 'risk_score': 60, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 98
+  score_risk: 100
+  score_decision: 95
+  score_comm: 100
+  diffs: {'ethics': 25, 'goals': 2, 'risk': 0, 'decision': 5, 'comm': 0}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 100
+  d_p: 100
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 93
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 93%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:25:41.449292Z
+================================================================================
+Кому показывают (viewer): id=6967901512, имя=ldksas
+Кого показывают (shown):   id=5183078211, имя=ldksas
+Итоговый процент совместимости: 94%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 75, 'goals_score': 48, 'risk_score': 100, 'decision_score': 40, 'comm_score': 56}
+Profile shown:   {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 83
+  score_risk: 100
+  score_decision: 85
+  score_comm: 96
+  diffs: {'ethics': 0, 'goals': 17, 'risk': 0, 'decision': 15, 'comm': 4}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 100
+  d_p: 50
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 94
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 94%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:25:45.716230Z
+================================================================================
+Кому показывают (viewer): id=6967901512, имя=ldksas
+Кого показывают (shown):   id=1424276927, имя=Александр Иванов
+Итоговый процент совместимости: 89%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 75, 'goals_score': 48, 'risk_score': 100, 'decision_score': 40, 'comm_score': 56}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 55, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 93
+  score_risk: 60
+  score_decision: 90
+  score_comm: 96
+  diffs: {'ethics': 0, 'goals': 7, 'risk': 40, 'decision': 10, 'comm': 4}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 50
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 89
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 89%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T18:25:47.958641Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ᗩᙁᙓXᗩᑎᗪᖇ
+Кого показывают (shown):   id=6967901512, имя=ldksas
+Итоговый процент совместимости: 94%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 75, 'goals_score': 48, 'risk_score': 100, 'decision_score': 40, 'comm_score': 56}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 83
+  score_risk: 100
+  score_decision: 85
+  score_comm: 96
+  diffs: {'ethics': 0, 'goals': 17, 'risk': 0, 'decision': 15, 'comm': 4}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 100
+  d_p: 50
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 94
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 94%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-07T19:05:59.857317Z
+================================================================================
+Кому показывают (viewer): id=1385108695, имя=Арих Павел
+Кого показывают (shown):   id=8413274422, имя=Арих аиаро
+Итоговый процент совместимости: 92%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 100, 'decision_score': 55, 'comm_score': 62}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 100
+  score_risk: 60
+  score_decision: 95
+  score_comm: 90
+  diffs: {'ethics': 0, 'goals': 0, 'risk': 40, 'decision': 5, 'comm': 10}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 0
+  d_k: 100
+  d_p: 100
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 92
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 92%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T10:25:53.906522Z
+================================================================================
+Кому показывают (viewer): id=7629803745, имя=Андрей
+Кого показывают (shown):   id=8413274422, имя=Арих аиаро
+Итоговый процент совместимости: 80%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 100, 'hacker_percent': 0, 'hipster_percent': 0, 'ethics_score': 50, 'goals_score': 100, 'risk_score': 60, 'decision_score': 40, 'comm_score': 75}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 48
+  score_risk: 100
+  score_decision: 90
+  score_comm: 77
+  diffs: {'ethics': 0, 'goals': 52, 'risk': 0, 'decision': 10, 'comm': 23}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 100
+  d_k: 0
+  d_p: 100
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 86
+E4 — штрафы (red flags): 6
+  - RF2 Goals: diff>=40 → -6
+E5 — итог (base - penalty): 80%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T10:26:37.429654Z
+================================================================================
+Кому показывают (viewer): id=7629803745, имя=Андрей
+Кого показывают (shown):   id=1424276927, имя=Александр Иванов
+Итоговый процент совместимости: 75%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 100, 'hacker_percent': 0, 'hipster_percent': 0, 'ethics_score': 50, 'goals_score': 100, 'risk_score': 60, 'decision_score': 40, 'comm_score': 75}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 55, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 55
+  score_risk: 100
+  score_decision: 90
+  score_comm: 77
+  diffs: {'ethics': 25, 'goals': 45, 'risk': 0, 'decision': 10, 'comm': 23}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 100
+  d_k: 50
+  d_p: 50
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 81
+E4 — штрафы (red flags): 6
+  - RF2 Goals: diff>=40 → -6
+E5 — итог (base - penalty): 75%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T10:26:53.418770Z
+================================================================================
+Кому показывают (viewer): id=8413274422, имя=Co-founder
+Кого показывают (shown):   id=7629803745, имя=Андрей
+Итоговый процент совместимости: 80%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 100, 'hacker_percent': 0, 'hipster_percent': 0, 'ethics_score': 50, 'goals_score': 100, 'risk_score': 60, 'decision_score': 40, 'comm_score': 75}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 48
+  score_risk: 100
+  score_decision: 90
+  score_comm: 77
+  diffs: {'ethics': 0, 'goals': 52, 'risk': 0, 'decision': 10, 'comm': 23}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 100
+  d_k: 0
+  d_p: 100
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 86
+E4 — штрафы (red flags): 6
+  - RF2 Goals: diff>=40 → -6
+E5 — итог (base - penalty): 80%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:09:59.170314Z
+================================================================================
+Кому показывают (viewer): id=1385108695, имя=Павел Арих
+Кого показывают (shown):   id=5183078211, имя=ldksas
+Итоговый процент совместимости: 90%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 100, 'decision_score': 55, 'comm_score': 62}
+Profile shown:   {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 83
+  score_risk: 100
+  score_decision: 100
+  score_comm: 90
+  diffs: {'ethics': 25, 'goals': 17, 'risk': 0, 'decision': 0, 'comm': 10}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 100
+  d_p: 50
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 90
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 90%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:11:41.179192Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=6967901512, имя=ldksas
+Итоговый процент совместимости: 94%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 75, 'goals_score': 48, 'risk_score': 100, 'decision_score': 40, 'comm_score': 56}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 83
+  score_risk: 100
+  score_decision: 85
+  score_comm: 96
+  diffs: {'ethics': 0, 'goals': 17, 'risk': 0, 'decision': 15, 'comm': 4}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 100
+  d_p: 50
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 94
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 94%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:11:48.071579Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=1385108695, имя=Арих Павел
+Итоговый процент совместимости: 90%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 100, 'decision_score': 55, 'comm_score': 62}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 83
+  score_risk: 100
+  score_decision: 100
+  score_comm: 90
+  diffs: {'ethics': 25, 'goals': 17, 'risk': 0, 'decision': 0, 'comm': 10}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 100
+  d_p: 50
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 90
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 90%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:11:57.735524Z
+================================================================================
+Кому показывают (viewer): id=6967901512, имя=Leva Ovikov
+Кого показывают (shown):   id=5183078211, имя=ldksas
+Итоговый процент совместимости: 94%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 75, 'goals_score': 48, 'risk_score': 100, 'decision_score': 40, 'comm_score': 56}
+Profile shown:   {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 83
+  score_risk: 100
+  score_decision: 85
+  score_comm: 96
+  diffs: {'ethics': 0, 'goals': 17, 'risk': 0, 'decision': 15, 'comm': 4}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 100
+  d_p: 50
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 94
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 94%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:16:55.798636Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=1385108695, имя=Арих Павел
+Итоговый процент совместимости: 90%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 100, 'decision_score': 55, 'comm_score': 62}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 83
+  score_risk: 100
+  score_decision: 100
+  score_comm: 90
+  diffs: {'ethics': 25, 'goals': 17, 'risk': 0, 'decision': 0, 'comm': 10}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 100
+  d_p: 50
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 90
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 90%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:16:59.926928Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=1424276927, имя=Александр Иванов
+Итоговый процент совместимости: 89%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 55, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 90
+  score_risk: 60
+  score_decision: 95
+  score_comm: 100
+  diffs: {'ethics': 0, 'goals': 10, 'risk': 40, 'decision': 5, 'comm': 0}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 50
+  d_p: 0
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 89
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 89%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:17:04.580837Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=7105084267, имя=ldksas
+Итоговый процент совместимости: 86%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 50, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 32, 'risk_score': 60, 'decision_score': 54, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 100
+  score_goals: 67
+  score_risk: 60
+  score_decision: 99
+  score_comm: 100
+  diffs: {'ethics': 0, 'goals': 33, 'risk': 40, 'decision': 1, 'comm': 0}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 50
+  d_p: 0
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 86
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 86%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:17:06.986815Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=8413274422, имя=Арих аиаро
+Итоговый процент совместимости: 83%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 50, 'goals_score': 48, 'risk_score': 60, 'decision_score': 50, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 83
+  score_risk: 60
+  score_decision: 95
+  score_comm: 100
+  diffs: {'ethics': 25, 'goals': 17, 'risk': 40, 'decision': 5, 'comm': 0}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 0
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 83
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 83%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:17:34.862520Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=8216024262, имя=Шгкп тмтал
+Итоговый процент совместимости: 80%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 100, 'goals_score': 45, 'risk_score': 60, 'decision_score': 55, 'comm_score': 32}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 80
+  score_risk: 60
+  score_decision: 100
+  score_comm: 80
+  diffs: {'ethics': 25, 'goals': 20, 'risk': 40, 'decision': 0, 'comm': 20}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 0
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 80
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 80%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:17:54.833393Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=7629803745, имя=Андрей
+Итоговый процент совместимости: 74%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 100, 'hacker_percent': 0, 'hipster_percent': 0, 'ethics_score': 50, 'goals_score': 100, 'risk_score': 60, 'decision_score': 40, 'comm_score': 75}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 65
+  score_risk: 60
+  score_decision: 85
+  score_comm: 77
+  diffs: {'ethics': 25, 'goals': 35, 'risk': 40, 'decision': 15, 'comm': 23}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 0
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 74
+E4 — штрафы (red flags): 0
+E5 — итог (base - penalty): 74%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:17:58.048598Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=7485051391, имя=ldksas
+Итоговый процент совместимости: 73%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 100, 'hipster_percent': 0, 'ethics_score': 25, 'goals_score': 50, 'risk_score': 60, 'decision_score': 55, 'comm_score': 52}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 50
+  score_goals: 85
+  score_risk: 60
+  score_decision: 100
+  score_comm: 100
+  diffs: {'ethics': 50, 'goals': 15, 'risk': 40, 'decision': 0, 'comm': 0}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 100
+  d_p: 50
+  similarity: 0
+  role_score: 100
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 81
+E4 — штрафы (red flags): 8
+  - RF1 Ethics: diff>=40 → -8
+E5 — итог (base - penalty): 73%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:18:00.000547Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=1669052279, имя=Виктор Баринов
+Итоговый процент совместимости: 64%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 100, 'goals_score': 38, 'risk_score': 20, 'decision_score': 50, 'comm_score': 42}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 73
+  score_risk: 20
+  score_decision: 95
+  score_comm: 90
+  diffs: {'ethics': 25, 'goals': 27, 'risk': 80, 'decision': 5, 'comm': 10}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 0
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 74
+E4 — штрафы (red flags): 10
+  - RF3 Risk: diff>=70 → -10
+E5 — итог (base - penalty): 64%
+================================================================================
+
+================================================================================
+ПОКАЗ АНКЕТЫ С СОВМЕСТИМОСТЬЮ — 2026-03-08T15:45:13.272270Z
+================================================================================
+Кому показывают (viewer): id=5183078211, имя=ldksas
+Кого показывают (shown):   id=1669052279, имя=Виктор Баринов
+Итоговый процент совместимости: 64%
+
+--- Профили (баллы) ---
+Profile viewer: {'hustler_percent': 50, 'hacker_percent': 0, 'hipster_percent': 50, 'ethics_score': 75, 'goals_score': 65, 'risk_score': 100, 'decision_score': 55, 'comm_score': 52}
+Profile shown:   {'hustler_percent': 0, 'hacker_percent': 0, 'hipster_percent': 100, 'ethics_score': 100, 'goals_score': 38, 'risk_score': 20, 'decision_score': 50, 'comm_score': 42}
+
+--- Как считался процент ---
+E1 — частные совместимости по факторам (ethics, goals, risk, decision, comm):
+  score_ethics: 75
+  score_goals: 73
+  score_risk: 20
+  score_decision: 95
+  score_comm: 90
+  diffs: {'ethics': 25, 'goals': 27, 'risk': 80, 'decision': 5, 'comm': 10}
+E2 — роли (разницы d_h, d_k, d_p, similarity, role_score):
+  d_h: 50
+  d_k: 0
+  d_p: 50
+  similarity: 50
+  role_score: 85
+E3 — базовая совместимость (веса 0.22, 0.18, 0.16, 0.14, 0.15, 0.15): 74
+E4 — штрафы (red flags): 10
+  - RF3 Risk: diff>=70 → -10
+E5 — итог (base - penalty): 64%
+================================================================================

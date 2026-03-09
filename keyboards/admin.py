@@ -79,12 +79,37 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
     )
     builder.add(
         InlineKeyboardButton(
+            text="⚙️ Лимиты",
+            callback_data=AdminCallbackData(action="limits").pack(),
+        )
+    )
+    builder.add(
+        InlineKeyboardButton(
             text="🗑 Очистить свайпы",
             callback_data=AdminCallbackData(action="clear_swipes").pack()
         )
     )
     builder.add(get_back_button("main_menu"))
     builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_admin_limits_keyboard(current_likes_limit: int) -> InlineKeyboardMarkup:
+    """Клавиатура экрана «Лимиты»: текущий лимит лайков и кнопки для выбора нового (0 = без лимита)."""
+    builder = InlineKeyboardBuilder()
+    # Варианты: 0 (без лимита), 1, 3, 5, 10
+    for n in (0, 1, 3, 5, 10):
+        label = "Без лимита" if n == 0 else str(n)
+        if n == current_likes_limit:
+            label = f"• {label} (сейчас)"
+        builder.add(
+            InlineKeyboardButton(
+                text=label,
+                callback_data=AdminCallbackData(action=f"set_likes_limit_{n}").pack(),
+            )
+        )
+    builder.adjust(2, 2, 1)  # два ряда по 2, потом один
+    builder.add(InlineKeyboardButton(text="🔙 К админ-панели", callback_data=AdminCallbackData(action="back").pack()))
     return builder.as_markup()
 
 

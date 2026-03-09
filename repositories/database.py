@@ -9,14 +9,15 @@ from config import Config
 config = Config()
 
 # Создание движка базы данных
-# pool_size и max_overflow — чтобы при пиковой нагрузке (тысячи пользователей)
-# запросы не стояли в очереди за соединением
+# pool_size и max_overflow под пик 400+ пользователей (одна сессия на запрос)
 engine = create_async_engine(
     config.DATABASE_URL,
     echo=False,
     future=True,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=20,
+    max_overflow=40,
+    pool_pre_ping=True,
+    pool_recycle=300,
 )
 
 # Создание фабрики сессий

@@ -95,7 +95,23 @@ class TestResultRepository:
             select(TestResult).where(TestResult.user_id == user_id)
         )
         return result.scalar_one_or_none()
-    
+
+    @staticmethod
+    async def get_by_user_ids(
+        session: AsyncSession, user_ids: list[int]
+    ) -> dict[int, TestResult]:
+        """Загрузка результатов тестов для списка user_id (telegram_id). Возвращает {user_id: TestResult}."""
+        if not user_ids:
+            return {}
+        result = await session.execute(
+            select(TestResult).where(
+                TestResult.user_id.in_(user_ids),
+                TestResult.main_test_completed == True,  # noqa: E712
+            )
+        )
+        rows = result.scalars().all()
+        return {r.user_id: r for r in rows}
+
     @staticmethod
     async def create_or_update(session: AsyncSession, user_id: int, **kwargs) -> TestResult:
         """Создание или обновление результатов теста"""

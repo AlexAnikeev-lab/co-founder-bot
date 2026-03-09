@@ -237,6 +237,7 @@ T = {
         "people_search": "🔍 Поиск людей",
         "people_favorites": "⭐ Избранные",
         "people_matches": "🤝 Совпадения",
+        "favorites_back_to_people": "🔙 В раздел Люди",
         "favorites_back": "◀️ Назад",
         "favorites_next": "Далее ▶️",
         # Тесты
@@ -303,7 +304,7 @@ T = {
         "subscription_already": "✅ У тебя уже есть активная подписка.\n\nЖми «Вернуться в профиль» — и пользуйся супер-лайком в разделе Партнёры.",
         "subscription_back_to_profile": "Вернуться в профиль",
         "subscription_admin_give": "🎉 <b>Тебе выдали подписку на месяц!</b>\n\nСпасибо за вклад в проект. Теперь тебе доступны: супер-лайк 🔥, 1 лайк в неделю и 5 избранных.",
-        "limit_likes_week": "⛔ Не более 1 лайка в неделю. Лимит исчерпан. Попробуйте через несколько дней.",
+        "limit_likes_week": "⛔ Не более {limit} лайков в неделю. Лимит исчерпан. Попробуйте через несколько дней.",
         "limit_bookmarks_week": "⛔ Не более 5 добавлений в избранное в неделю. Лимит исчерпан. Попробуйте через несколько дней.",
         "limit_favorites_total": "⛔ В избранном может быть не более 5 анкет. Удалите кого-то из избранного или оформите подписку.",
         "card_super_like_btn": "🔥",
@@ -413,7 +414,7 @@ Max 1000 characters.""",
         "partners_access_denied": "⛔ <b>Access restricted</b>\n\nContact support.",
         "partners_error_try_again": "Something went wrong. Try again or leave the Partners section.",
         "partners_btn_take_test": "📋 Take test",
-        "limit_likes_week": "⛔ Up to 1 like per week. Limit reached. Try again in a few days.",
+        "limit_likes_week": "⛔ Up to {limit} likes per week. Limit reached. Try again in a few days.",
         "limit_bookmarks_week": "⛔ Up to 5 additions to favorites per week. Limit reached. Try again in a few days.",
         "quality_emoji_prompt": "Choose an emoji for this strength:",
         "quality_no_emoji_in_text": "❌ Don't use emoji in the text. You can pick an emoji next.",
@@ -535,6 +536,7 @@ Max 1000 characters.""",
         "people_search": "🔍 Search people",
         "people_favorites": "⭐ Favorites",
         "people_matches": "🤝 Matches",
+        "favorites_back_to_people": "🔙 Back to People",
         "favorites_back": "◀️ Back",
         "favorites_next": "Next ▶️",
         "tests_title": "📝 <b>Tests</b>",
@@ -602,11 +604,17 @@ A good business idea usually grows from a <b>problem</b> you see around you.
 }
 
 
-def t(lang: str, key: str) -> str:
-    """Текст по ключу для языка. Если ключа нет — fallback на ru."""
+def t(lang: str, key: str, **kwargs: object) -> str:
+    """Текст по ключу для языка. Если ключа нет — fallback на ru. Если передан kwargs — подстановка {key} в строку."""
     if lang not in T:
         lang = DEFAULT_LANG
-    return T[lang].get(key) or T[DEFAULT_LANG].get(key) or key
+    s = T[lang].get(key) or T[DEFAULT_LANG].get(key) or key
+    if kwargs:
+        try:
+            s = s.format(**kwargs)
+        except KeyError:
+            pass
+    return s
 
 
 def text_options(key: str) -> set[str]:

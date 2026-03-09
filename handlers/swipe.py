@@ -9,11 +9,14 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import BaseFilter
+from sqlalchemy.ext.asyncio import AsyncSession
 from repositories.database import get_session
 from repositories.user_repository import User, UserRepository
 from repositories.test_repository import TestResult, TestResultRepository
 from repositories.swipe_repository import SwipeRepository
 from services.compatibility_service import CompatibilityService
+from services.settings import get_likes_per_week_limit
+from middlewares.delete_previous import protect_message
 from keyboards.swipe import (
     get_swipe_keyboard,
     get_swipe_keyboard_from_notification,
@@ -201,87 +204,112 @@ def format_user_profile(
     return "\n".join(text_parts)
 
 
+# Максимум кандидатов для расчёта совместимости (устраняет N+1 и тяжёлые запросы при 400+ пользователях)
+SWIPE_CANDIDATES_LIMIT = 80
+
+
 async def get_next_user_for_swipe(
     session,
     current_user_id: int,
     current_user: User
 ) -> Optional[tuple[User, int]]:
     """
-    Получение следующего пользователя для свайпа с учетом совместимости
-    
-    Returns:
-        Tuple (User, compatibility_score) или None
+    Получение следующего пользователя для свайпа с учетом совместимости.
+    Сначала показываем тех, кого ещё не просматривали; когда таких не остаётся — показываем заново дизлайкнутых.
     """
-    # Получаем профиль текущего пользователя
+    result = await _get_next_user_with_excluded(
+        session, current_user_id, current_user,
+        excluded_ids=None,  # сначала исключаем всех, на кого уже свайпнули
+    )
+    if result is not None:
+        return result
+    # Все просмотренные закончились — даём второй круг: исключаем только лайки, закладки и пропуски (дизлайкнутых показываем снова)
+    excluded_only_non_dislike = await SwipeRepository.get_swiped_user_ids_with_actions(
+        session, current_user_id, ("like", "bookmark", "skip")
+    )
+    return await _get_next_user_with_excluded(
+        session, current_user_id, current_user,
+        excluded_ids=excluded_only_non_dislike,
+    )
+
+
+async def _get_next_user_with_excluded(
+    session,
+    current_user_id: int,
+    current_user: User,
+    excluded_ids: Optional[list] = None,
+) -> Optional[tuple[User, int]]:
+    """Следующий пользователь для свайпа, исключая только переданные id (если None — все, на кого уже свайпнули)."""
     test_result = await TestResultRepository.get_by_user_id(session, current_user_id)
     if not test_result or not test_result.main_test_completed:
-        # Если нет основного теста, показываем всех без сортировки
-        return await _get_any_user(session, current_user_id)
-    
-    # Получаем профиль текущего пользователя
+        return await _get_any_user(session, current_user_id, excluded_ids=excluded_ids)
+
     current_profile = _get_user_profile(test_result)
     if not current_profile:
-        return await _get_any_user(session, current_user_id)
-    
-    # Получаем список уже просмотренных пользователей
-    swiped_ids = await SwipeRepository.get_swiped_user_ids(session, current_user_id)
-    swiped_ids.append(current_user_id)  # Исключаем себя
-    
-    # Получаем всех пользователей, которых еще не свайпали (исключаем теневой/полный бан)
-    query = select(User).where(
-        and_(
-            User.telegram_id.notin_(swiped_ids),
-            User.is_registered == True,
-            User.is_minor == False,
-            User.short_description.isnot(None),
-            User.full_description.isnot(None),
-            User.qualities.isnot(None),
-            (User.ban_status.is_(None)) | (User.ban_status == "none"),
+        return await _get_any_user(session, current_user_id, excluded_ids=excluded_ids)
+
+    if excluded_ids is None:
+        swiped_ids = await SwipeRepository.get_swiped_user_ids(session, current_user_id)
+    else:
+        swiped_ids = list(excluded_ids)
+    swiped_ids.append(current_user_id)
+
+    query = (
+        select(User)
+        .where(
+            and_(
+                User.telegram_id.notin_(swiped_ids),
+                User.is_registered == True,
+                User.is_minor == False,
+                User.short_description.isnot(None),
+                User.full_description.isnot(None),
+                User.qualities.isnot(None),
+                (User.ban_status.is_(None)) | (User.ban_status == "none"),
+            )
         )
+        .limit(SWIPE_CANDIDATES_LIMIT)
     )
-    
     result = await session.execute(query)
     all_users = list(result.scalars().all())
-    
+
     if not all_users:
         return None
-    
-    # Рассчитываем совместимость для каждого пользователя
+
+    candidate_ids = [u.telegram_id for u in all_users]
+    test_results_map = await TestResultRepository.get_by_user_ids(session, candidate_ids)
+
     users_with_compatibility = []
-    
     for user in all_users:
-        user_test_result = await TestResultRepository.get_by_user_id(session, user.telegram_id)
-        if not user_test_result or not user_test_result.main_test_completed:
-            # Если у пользователя нет теста, совместимость = 0
+        user_tr = test_results_map.get(user.telegram_id)
+        if not user_tr:
             users_with_compatibility.append((user, 0))
             continue
-        
-        user_profile = _get_user_profile(user_test_result)
+        user_profile = _get_user_profile(user_tr)
         if not user_profile:
             users_with_compatibility.append((user, 0))
             continue
-        
         compatibility = CompatibilityService.calculate_compatibility(
-            current_profile,
-            user_profile
+            current_profile, user_profile
         )
         users_with_compatibility.append((user, compatibility))
-    
-    # Сортируем по совместимости (от большего к меньшему)
-    users_with_compatibility.sort(key=lambda x: x[1], reverse=True)
 
-    # Возвращаем первого пользователя
+    users_with_compatibility.sort(key=lambda x: x[1], reverse=True)
     if not users_with_compatibility:
         return None
     winner_user, winner_compatibility = users_with_compatibility[0]
     return (winner_user, winner_compatibility)
 
 
-async def _get_any_user(session, current_user_id: int) -> Optional[tuple[User, int]]:
-    """Получение любого пользователя без учета совместимости"""
-    swiped_ids = await SwipeRepository.get_swiped_user_ids(session, current_user_id)
+async def _get_any_user(
+    session, current_user_id: int, excluded_ids: Optional[list] = None
+) -> Optional[tuple[User, int]]:
+    """Получение любого пользователя без учета совместимости. excluded_ids: если None — исключаем всех, на кого уже свайпнули."""
+    if excluded_ids is None:
+        swiped_ids = await SwipeRepository.get_swiped_user_ids(session, current_user_id)
+    else:
+        swiped_ids = list(excluded_ids)
     swiped_ids.append(current_user_id)
-    
+
     query = select(User).where(
         and_(
             User.telegram_id.notin_(swiped_ids),
@@ -290,10 +318,10 @@ async def _get_any_user(session, current_user_id: int) -> Optional[tuple[User, i
             (User.ban_status.is_(None)) | (User.ban_status == "none"),
         )
     ).limit(1)
-    
+
     result = await session.execute(query)
     user = result.scalar_one_or_none()
-    
+
     return (user, 0) if user else None
 
 
@@ -327,15 +355,14 @@ def _get_user_profile(test_result: TestResult, include_label: bool = False) -> O
 
 
 async def show_next_profile(
+    session: AsyncSession,
     message_or_callback: Message | CallbackQuery,
     user_id: int,
     current_user: User,
     state: Optional[FSMContext] = None,
     in_partners: bool = False,
 ) -> None:
-    """
-    Показ следующей анкеты (язык из current_user).
-    """
+    """Показ следующей анкеты (язык из current_user). Текущую карточку не удаляем — остаётся с выбранным действием."""
     lang = getattr(current_user, "language", None) or "ru"
     try:
         if isinstance(message_or_callback, CallbackQuery):
@@ -345,88 +372,101 @@ async def show_next_profile(
             message = message_or_callback
             is_callback = False
 
-        async for session in get_session():
-            next_user_data = await get_next_user_for_swipe(session, user_id, current_user)
+        chat_id = message.chat.id if message.chat else None
+        if chat_id:
+            if is_callback:
+                protect_message(chat_id, message.message_id)
+            elif state:
+                data = await state.get_data()
+                keep_id = data.get("last_bot_message_id")
+                if keep_id:
+                    protect_message(chat_id, keep_id)
 
-            if not next_user_data:
-                no_users_text = f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_no_users')}"
-                if in_partners and state:
-                    await state.update_data(in_partners=False, current_partner_id=None)
-                    await message.answer(
-                        no_users_text + "\n\n" + t(lang, "choose_menu_item"),
-                        reply_markup=get_main_menu_keyboard(current_user.is_minor, lang),
-                    )
-                else:
-                    no_users_kb = InlineKeyboardMarkup(inline_keyboard=[[get_back_button("main_menu", lang)]])
-                    await message.answer(no_users_text, reply_markup=no_users_kb)
-                return
+        next_user_data = await get_next_user_for_swipe(session, user_id, current_user)
 
-            next_user, compatibility = next_user_data
+        if not next_user_data:
+            no_users_text = f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_no_users')}"
             if in_partners and state:
-                await state.update_data(current_partner_id=next_user.telegram_id)
-
-            try:
-                tr_viewer = await TestResultRepository.get_by_user_id(session, user_id)
-                tr_shown = await TestResultRepository.get_by_user_id(session, next_user.telegram_id)
-                pv = _get_user_profile(tr_viewer) if tr_viewer else None
-                pl = _get_user_profile(tr_shown) if tr_shown else None
-                if pv and pl:
-                    log_compatibility_calculation(
-                        viewer_telegram_id=user_id,
-                        shown_user_telegram_id=next_user.telegram_id,
-                        profile_viewer=pv,
-                        profile_shown=pl,
-                        viewer_name=current_user.name,
-                        shown_name=next_user.name,
-                    )
-                else:
-                    log_compatibility_show_minimal(
-                        viewer_telegram_id=user_id,
-                        shown_user_telegram_id=next_user.telegram_id,
-                        compatibility_percent=compatibility,
-                        reason="нет полных профилей теста для расчёта",
-                    )
-            except Exception as e:
-                logger.exception("Ошибка записи расчёта совместимости в .txt: %s", e)
-
-            lang = getattr(current_user, "language", None) or "ru"
-            has_super_like = getattr(current_user, "subscription_active", False) and not getattr(current_user, "super_like_used", False)
-            profile_text = format_user_profile(next_user, compatibility, lang=lang)
-            if in_partners:
-                swipe_kb = get_swipe_keyboard_expand_only(
-                    next_user.telegram_id, expanded=False, from_notification=False, lang=lang
-                )
-            else:
-                swipe_kb = get_swipe_keyboard(next_user.telegram_id, lang=lang, has_super_like=has_super_like)
-
-            if next_user.photo_id:
-                await message.answer_photo(
-                    photo=next_user.photo_id,
-                    caption=profile_text,
-                    reply_markup=swipe_kb,
-                )
-            else:
+                await state.update_data(in_partners=False, current_partner_id=None)
                 await message.answer(
-                    profile_text,
-                    reply_markup=swipe_kb,
+                    no_users_text + "\n\n" + t(lang, "choose_menu_item"),
+                    reply_markup=get_main_menu_keyboard(current_user.is_minor, lang),
                 )
-            break
+            else:
+                no_users_kb = InlineKeyboardMarkup(inline_keyboard=[[get_back_button("main_menu", lang)]])
+                await message.answer(no_users_text, reply_markup=no_users_kb)
+            return
+
+        next_user, compatibility = next_user_data
+        if in_partners and state:
+            await state.update_data(current_partner_id=next_user.telegram_id)
+
+        try:
+            tr_viewer = await TestResultRepository.get_by_user_id(session, user_id)
+            tr_shown = await TestResultRepository.get_by_user_id(session, next_user.telegram_id)
+            pv = _get_user_profile(tr_viewer) if tr_viewer else None
+            pl = _get_user_profile(tr_shown) if tr_shown else None
+            if pv and pl:
+                log_compatibility_calculation(
+                    viewer_telegram_id=user_id,
+                    shown_user_telegram_id=next_user.telegram_id,
+                    profile_viewer=pv,
+                    profile_shown=pl,
+                    viewer_name=current_user.name,
+                    shown_name=next_user.name,
+                )
+            else:
+                log_compatibility_show_minimal(
+                    viewer_telegram_id=user_id,
+                    shown_user_telegram_id=next_user.telegram_id,
+                    compatibility_percent=compatibility,
+                    reason="нет полных профилей теста для расчёта",
+                )
+        except Exception as e:
+            logger.exception("Ошибка записи расчёта совместимости в .txt: %s", e)
+
+        lang = getattr(current_user, "language", None) or "ru"
+        has_super_like = getattr(current_user, "subscription_active", False) and not getattr(current_user, "super_like_used", False)
+        profile_text = format_user_profile(next_user, compatibility, lang=lang)
+        if in_partners:
+            swipe_kb = get_swipe_keyboard_expand_only(
+                next_user.telegram_id, expanded=False, from_notification=False, lang=lang
+            )
+        else:
+            swipe_kb = get_swipe_keyboard(next_user.telegram_id, lang=lang, has_super_like=has_super_like)
+
+        if next_user.photo_id:
+            sent = await message.answer_photo(
+                photo=next_user.photo_id,
+                caption=profile_text,
+                reply_markup=swipe_kb,
+            )
+        else:
+            sent = await message.answer(
+                profile_text,
+                reply_markup=swipe_kb,
+            )
+        if state and in_partners and sent:
+            await state.update_data(last_bot_message_id=sent.message_id)
     except Exception as e:
         logger.error(f"Ошибка при показе профиля: {e}", exc_info=True)
         if isinstance(message_or_callback, CallbackQuery):
             _lang = "ru"
             if hasattr(message_or_callback, "from_user") and message_or_callback.from_user:
-                async for _s in get_session():
-                    u = await UserRepository.get_by_telegram_id(_s, message_or_callback.from_user.id)
+                try:
+                    u = await UserRepository.get_by_telegram_id(session, message_or_callback.from_user.id)
                     if u:
                         _lang = getattr(u, "language", None) or "ru"
-                    break
+                except Exception:
+                    pass
             await message_or_callback.answer(t(_lang, "error_try_later"), show_alert=True)
 
 
 @router.message(F.text.in_(text_options("menu_partners")), _FilterNotInPartners())
 @router.callback_query(F.data == "dating")
-async def cmd_dating(event: Message | CallbackQuery, state: FSMContext) -> None:
+async def cmd_dating(
+    event: Message | CallbackQuery, state: FSMContext, session: AsyncSession
+) -> None:
     """Раздел Партнеры (язык ru/en). При переходе удаляем предыдущее меню."""
     if isinstance(event, CallbackQuery):
         await event.answer()
@@ -454,61 +494,59 @@ async def cmd_dating(event: Message | CallbackQuery, state: FSMContext) -> None:
                 pass
     await state.update_data(profile_section_message_id=None)
 
-    async for session in get_session():
-        user = await UserRepository.get_by_telegram_id(session, user_id)
-        if not user:
-            await message.answer(t("ru", "not_registered_use_start"))
-            return
+    user = await UserRepository.get_by_telegram_id(session, user_id)
+    if not user:
+        await message.answer(t("ru", "not_registered_use_start"))
+        return
 
-        lang = getattr(user, "language", None) or "ru"
-        test_result = await TestResultRepository.get_by_user_id(session, user_id)
-        if not test_result or not test_result.main_test_completed:
-            builder = InlineKeyboardBuilder()
-            builder.add(InlineKeyboardButton(
-                text=t(lang, "partners_btn_take_test"),
-                callback_data="start_test:main"
-            ))
-            builder.add(get_back_button("main_menu", lang))
-            builder.adjust(1)
-            await message.answer(
-                f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_main_test_required')}",
-                reply_markup=builder.as_markup()
-            )
-            return
-
-        missing_fields = []
-        if not user.short_description:
-            missing_fields.append(t(lang, "partners_field_short_desc"))
-        if not user.full_description:
-            missing_fields.append(t(lang, "partners_field_full_desc"))
-        if not user.qualities:
-            missing_fields.append(t(lang, "partners_field_qualities"))
-
-        if missing_fields:
-            fields_text = ", ".join(missing_fields)
-            builder = InlineKeyboardBuilder()
-            builder.add(get_back_button("main_menu", lang))
-            await message.answer(
-                f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_fill_profile').format(fields=fields_text)}",
-                reply_markup=builder.as_markup()
-            )
-            return
-
-        if (user.ban_status or "none") == "full":
-            await message.answer(
-                t(lang, "partners_access_denied"),
-                reply_markup=get_main_menu_keyboard(is_minor=user.is_minor, lang=lang),
-            )
-            return
-
-        has_super_like = getattr(user, "subscription_active", False) and not getattr(user, "super_like_used", False)
-        await state.update_data(in_partners=True)
+    lang = getattr(user, "language", None) or "ru"
+    test_result = await TestResultRepository.get_by_user_id(session, user_id)
+    if not test_result or not test_result.main_test_completed:
+        builder = InlineKeyboardBuilder()
+        builder.add(InlineKeyboardButton(
+            text=t(lang, "partners_btn_take_test"),
+            callback_data="start_test:main"
+        ))
+        builder.add(get_back_button("main_menu", lang))
+        builder.adjust(1)
         await message.answer(
-            f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_intro')}",
-            reply_markup=get_partners_reply_keyboard(lang, has_super_like=has_super_like),
+            f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_main_test_required')}",
+            reply_markup=builder.as_markup()
         )
-        await show_next_profile(message, user_id, user, state=state, in_partners=True)
-        break
+        return
+
+    missing_fields = []
+    if not user.short_description:
+        missing_fields.append(t(lang, "partners_field_short_desc"))
+    if not user.full_description:
+        missing_fields.append(t(lang, "partners_field_full_desc"))
+    if not user.qualities:
+        missing_fields.append(t(lang, "partners_field_qualities"))
+
+    if missing_fields:
+        fields_text = ", ".join(missing_fields)
+        builder = InlineKeyboardBuilder()
+        builder.add(get_back_button("main_menu", lang))
+        await message.answer(
+            f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_fill_profile').format(fields=fields_text)}",
+            reply_markup=builder.as_markup()
+        )
+        return
+
+    if (user.ban_status or "none") == "full":
+        await message.answer(
+            t(lang, "partners_access_denied"),
+            reply_markup=get_main_menu_keyboard(is_minor=user.is_minor, lang=lang),
+        )
+        return
+
+    has_super_like = getattr(user, "subscription_active", False) and not getattr(user, "super_like_used", False)
+    await state.update_data(in_partners=True)
+    await message.answer(
+        f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_intro')}",
+        reply_markup=get_partners_reply_keyboard(lang, has_super_like=has_super_like),
+    )
+    await show_next_profile(session, message, user_id, user, state=state, in_partners=True)
 
 
 def _partners_text_to_action(text: str) -> Optional[str]:
@@ -526,7 +564,9 @@ def _partners_text_to_action(text: str) -> Optional[str]:
     F.text.in_([PARTNERS_BTN_SUPER_LIKE, PARTNERS_BTN_LIKE, PARTNERS_BTN_BOOKMARK, PARTNERS_BTN_DISLIKE]),
     _FilterInPartners(),
 )
-async def handle_partners_reply_action(message: Message, state: FSMContext) -> None:
+async def handle_partners_reply_action(
+    message: Message, state: FSMContext, session: AsyncSession
+) -> None:
     """
     Обработка нажатий [🤝] [🏷] [👎] в разделе Партнеры.
     Действие применяется к текущей анкете (current_partner_id из state), затем показывается следующая.
@@ -545,115 +585,115 @@ async def handle_partners_reply_action(message: Message, state: FSMContext) -> N
     swiper_user_id = message.from_user.id if message.from_user else 0
 
     try:
-        async for session in get_session():
-            current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
-            lang = getattr(current_user, "language", None) or "ru" if current_user else "ru"
-            # Супер-лайк: только у подписчика и если ещё не использован
-            if action == "super_like":
-                if not current_user or not getattr(current_user, "subscription_active", False) or getattr(current_user, "super_like_used", False):
-                    await message.answer(t(lang, "limit_likes_week"))
-                    if current_user:
-                        await show_next_profile(message, swiper_user_id, current_user, state=state, in_partners=True)
-                    return
-            # Лимиты: 1 лайк в неделю, 5 добавлений в избранное в неделю
-            if action == "like":
-                count_likes = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "like")
-                if count_likes >= 1:
-                    await message.answer(t(lang, "limit_likes_week"))
-                    await show_next_profile(message, swiper_user_id, current_user, state=state, in_partners=True)
-                    return
-            elif action == "bookmark":
-                count_bookmarks = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "bookmark")
-                if count_bookmarks >= 5:
-                    await message.answer(t(lang, "limit_bookmarks_week"))
-                    await show_next_profile(message, swiper_user_id, current_user, state=state, in_partners=True)
-                    return
+        current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
+        lang = getattr(current_user, "language", None) or "ru" if current_user else "ru"
+        if action == "super_like":
+            if not current_user or not getattr(current_user, "subscription_active", False) or getattr(current_user, "super_like_used", False):
+                await message.answer(t(lang, "limit_likes_week"))
+                if current_user:
+                    await show_next_profile(session, message, swiper_user_id, current_user, state=state, in_partners=True)
+                return
+        if action == "like":
+            limit = get_likes_per_week_limit()
+            count_likes = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "like")
+            if limit > 0 and count_likes >= limit:
+                await message.answer(t(lang, "limit_likes_week", limit=limit))
+                await show_next_profile(session, message, swiper_user_id, current_user, state=state, in_partners=True)
+                return
+        elif action == "bookmark":
+            count_bookmarks = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "bookmark")
+            if count_bookmarks >= 5:
+                await message.answer(t(lang, "limit_bookmarks_week"))
+                await show_next_profile(session, message, swiper_user_id, current_user, state=state, in_partners=True)
+                return
 
-            await SwipeRepository.create_swipe(session, swiper_user_id, swiped_user_id, action)
+        await SwipeRepository.create_swipe(session, swiper_user_id, swiped_user_id, action)
 
-            if action == "super_like":
-                await UserRepository.update(session, current_user, super_like_used=True)
-                swiped_user = await UserRepository.get_by_telegram_id(session, swiped_user_id)
-                link = _get_dm_link(swiped_user) if swiped_user else f"tg://user?id={swiped_user_id}"
-                super_kb = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=t(lang, "btn_go_to_dm"), url=link)]
-                ])
-                await message.answer(
-                    t(lang, "super_like_message"),
-                    reply_markup=super_kb,
+        if action == "super_like":
+            await UserRepository.update(session, current_user, super_like_used=True)
+            swiped_user = await UserRepository.get_by_telegram_id(session, swiped_user_id)
+            link = _get_dm_link(swiped_user) if swiped_user else f"tg://user?id={swiped_user_id}"
+            super_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=t(lang, "btn_go_to_dm"), url=link)],
+                [get_back_button("main_menu", lang)],
+            ])
+            await message.answer(
+                t(lang, "super_like_message"),
+                reply_markup=super_kb,
+            )
+            await show_next_profile(session, message, swiper_user_id, current_user, state=state, in_partners=True)
+            return
+        if action == "like":
+            swiper_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
+            if swiper_user and (swiper_user.ban_status or "none") in ("none",):
+                swiper_name = swiper_user.name or t(lang, "card_user_fallback")
+                swiped_user_obj = await UserRepository.get_by_telegram_id(session, swiped_user_id)
+                notif_lang = (getattr(swiped_user_obj, "language", None) or "ru") if swiped_user_obj else "ru"
+                await _send_like_notification(
+                    message.bot, swiped_user_id, swiper_name, swiper_user_id, lang=notif_lang
                 )
-                await show_next_profile(message, swiper_user_id, current_user, state=state, in_partners=True)
-                break
-            if action == "like":
-                swiper_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
-                # Уведомление о лайке не отправляем, если у лайкнувшего теневой или полный бан
-                if swiper_user and (swiper_user.ban_status or "none") in ("none",):
-                    swiper_name = swiper_user.name or t(lang, "card_user_fallback")
-                    swiped_user_obj = await UserRepository.get_by_telegram_id(session, swiped_user_id)
-                    notif_lang = (getattr(swiped_user_obj, "language", None) or "ru") if swiped_user_obj else "ru"
-                    await _send_like_notification(
-                        message.bot, swiped_user_id, swiper_name, swiper_user_id, lang=notif_lang
-                    )
 
-                mutual = await SwipeRepository.check_mutual_like(session, swiper_user_id, swiped_user_id)
-                if mutual:
-                    try:
-                        tr_a = await TestResultRepository.get_by_user_id(session, swiper_user_id)
-                        tr_b = await TestResultRepository.get_by_user_id(session, swiped_user_id)
-                        profile_a = _get_user_profile(tr_a, include_label=True)
-                        profile_b = _get_user_profile(tr_b, include_label=True)
-                        if profile_a and profile_b:
-                            final_score, details = CompatibilityService.calculate_compatibility_detailed(
-                                profile_a, profile_b
-                            )
-                            swiper_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
-                            name_a = (swiper_user.name or "Пользователь") if swiper_user else "Пользователь"
-                            user_b = await UserRepository.get_by_telegram_id(session, swiped_user_id)
-                            name_b = (user_b.name or "Пользователь") if user_b else "Пользователь"
-                            log_match_comparison(
-                                user_a_id=swiper_user_id, user_a_name=name_a,
-                                user_b_id=swiped_user_id, user_b_name=name_b,
-                                final_score=final_score, details=details,
-                            )
-                    except Exception as e:
-                        logger.error("Ошибка записи сравнения при совпадении (reply): %s", e, exc_info=True)
-
-                    swiped_user = await UserRepository.get_by_telegram_id(session, swiped_user_id)
-                    swiper_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
-                    link_to_other = _get_dm_link(swiped_user) if swiped_user else f"tg://user?id={swiped_user_id}"
-                    match_kb = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text=t(lang, "btn_go_to_dm"), url=link_to_other)]
-                    ])
-                    match_msg = t(lang, "match_title") + "\n\n" + t(lang, "match_message")
-                    await message.answer(match_msg, reply_markup=match_kb)
-                    link_to_swiper = _get_dm_link(swiper_user) if swiper_user else f"tg://user?id={swiper_user_id}"
-                    swiped_user_obj = await UserRepository.get_by_telegram_id(session, swiped_user_id)
-                    other_lang = (getattr(swiped_user_obj, "language", None) or "ru") if swiped_user_obj else "ru"
-                    match_kb_other = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text=t(other_lang, "btn_go_to_dm"), url=link_to_swiper)]
-                    ])
-                    match_msg_other = t(other_lang, "match_title") + "\n\n" + t(other_lang, "match_message")
-                    try:
-                        await message.bot.send_message(
-                            swiped_user_id,
-                            match_msg_other,
-                            reply_markup=match_kb_other,
+            mutual = await SwipeRepository.check_mutual_like(session, swiper_user_id, swiped_user_id)
+            if mutual:
+                try:
+                    tr_a = await TestResultRepository.get_by_user_id(session, swiper_user_id)
+                    tr_b = await TestResultRepository.get_by_user_id(session, swiped_user_id)
+                    profile_a = _get_user_profile(tr_a, include_label=True)
+                    profile_b = _get_user_profile(tr_b, include_label=True)
+                    if profile_a and profile_b:
+                        final_score, details = CompatibilityService.calculate_compatibility_detailed(
+                            profile_a, profile_b
                         )
-                    except Exception as e:
-                        logger.error("Ошибка отправки уведомления о мэтче (reply): %s", e)
+                        swiper_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
+                        name_a = (swiper_user.name or "Пользователь") if swiper_user else "Пользователь"
+                        user_b = await UserRepository.get_by_telegram_id(session, swiped_user_id)
+                        name_b = (user_b.name or "Пользователь") if user_b else "Пользователь"
+                        log_match_comparison(
+                            user_a_id=swiper_user_id, user_a_name=name_a,
+                            user_b_id=swiped_user_id, user_b_name=name_b,
+                            final_score=final_score, details=details,
+                        )
+                except Exception as e:
+                    logger.error("Ошибка записи сравнения при совпадении (reply): %s", e, exc_info=True)
 
-            current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
-            if current_user:
-                await show_next_profile(message, swiper_user_id, current_user, state=state, in_partners=True)
-            break
+                swiped_user = await UserRepository.get_by_telegram_id(session, swiped_user_id)
+                swiper_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
+                link_to_other = _get_dm_link(swiped_user) if swiped_user else f"tg://user?id={swiped_user_id}"
+                match_kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text=t(lang, "btn_go_to_dm"), url=link_to_other)],
+                    [get_back_button("main_menu", lang)],
+                ])
+                match_msg = t(lang, "match_title") + "\n\n" + t(lang, "match_message")
+                await message.answer(match_msg, reply_markup=match_kb)
+                link_to_swiper = _get_dm_link(swiper_user) if swiper_user else f"tg://user?id={swiper_user_id}"
+                swiped_user_obj = await UserRepository.get_by_telegram_id(session, swiped_user_id)
+                other_lang = (getattr(swiped_user_obj, "language", None) or "ru") if swiped_user_obj else "ru"
+                match_kb_other = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text=t(other_lang, "btn_go_to_dm"), url=link_to_swiper)],
+                    [get_back_button("main_menu", other_lang)],
+                ])
+                match_msg_other = t(other_lang, "match_title") + "\n\n" + t(other_lang, "match_message")
+                try:
+                    await message.bot.send_message(
+                        swiped_user_id,
+                        match_msg_other,
+                        reply_markup=match_kb_other,
+                    )
+                except Exception as e:
+                    logger.error("Ошибка отправки уведомления о мэтче (reply): %s", e)
+
+        current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
+        if current_user:
+            await show_next_profile(session, message, swiper_user_id, current_user, state=state, in_partners=True)
     except Exception as e:
         logger.error("Ошибка при обработке действия из reply-клавиатуры Партнеры: %s", e, exc_info=True)
         err_lang = "ru"
-        async for session in get_session():
+        try:
             u = await UserRepository.get_by_telegram_id(session, swiper_user_id)
             if u:
                 err_lang = getattr(u, "language", None) or "ru"
-            break
+        except Exception:
+            pass
         await message.answer(t(err_lang, "partners_error_try_again"))
 
 
@@ -841,9 +881,10 @@ async def handle_swipe_from_notification(callback: CallbackQuery) -> None:
 
         async for session in get_session():
             if action == "like":
+                limit = get_likes_per_week_limit()
                 count_likes = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "like")
-                if count_likes >= 1:
-                    await callback.answer(t(lang, "limit_likes_week"), show_alert=True)
+                if limit > 0 and count_likes >= limit:
+                    await callback.answer(t(lang, "limit_likes_week", limit=limit), show_alert=True)
                     return
             elif action == "bookmark":
                 count_bookmarks = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "bookmark")
@@ -894,7 +935,8 @@ async def handle_swipe_from_notification(callback: CallbackQuery) -> None:
                     swiped_user_obj = await UserRepository.get_by_telegram_id(session, swiped_user_id)
                     other_lang = (getattr(swiped_user_obj, "language", None) or "ru") if swiped_user_obj else "ru"
                     match_kb_other = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text=t(other_lang, "btn_go_to_dm"), url=link_to_swiper)]
+                        [InlineKeyboardButton(text=t(other_lang, "btn_go_to_dm"), url=link_to_swiper)],
+                        [get_back_button("main_menu", other_lang)],
                     ])
                     match_msg_other = t(other_lang, "match_title") + "\n\n" + t(other_lang, "match_message")
                     try:
@@ -966,6 +1008,7 @@ async def _show_next_favorite_or_empty(
         total = len(new_ids)
         kb = get_favorites_keyboard(uid, 0, total, expanded=False, lang=lang)
         if send_new_message:
+            protect_message(msg.chat.id, msg.message_id)
             if user.photo_id:
                 sent = await msg.answer_photo(
                     photo=user.photo_id,
@@ -1014,7 +1057,6 @@ async def _show_next_favorite_or_empty(
 @router.callback_query(F.data.startswith("swipe_"))
 async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> None:
     """Обработка действий свайпа (лайк, дизлайк, пропуск, заметка). При лайке/дизлайке из избранного — убираем из списка и показываем следующего."""
-    await callback.answer()
     lang = "ru"
     async for _s in get_session():
         u = await UserRepository.get_by_telegram_id(_s, callback.from_user.id)
@@ -1024,6 +1066,7 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
     try:
         parts = callback.data.split(":")
         if len(parts) != 2:
+            await callback.answer()
             return
         action = parts[0].replace("swipe_", "")
         swiped_user_id = int(parts[1])
@@ -1039,9 +1082,10 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
                     await callback.answer(t(lang, "limit_likes_week"), show_alert=True)
                     return
             if action == "like":
+                limit = get_likes_per_week_limit()
                 count_likes = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "like")
-                if count_likes >= 1:
-                    await callback.answer(t(lang, "limit_likes_week"), show_alert=True)
+                if limit > 0 and count_likes >= limit:
+                    await callback.answer(t(lang, "limit_likes_week", limit=limit), show_alert=True)
                     return
             elif action == "bookmark":
                 count_bookmarks = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "bookmark")
@@ -1049,6 +1093,7 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
                     await callback.answer(t(lang, "limit_bookmarks_week"), show_alert=True)
                     return
 
+            await callback.answer()
             await SwipeRepository.create_swipe(
                 session,
                 swiper_user_id,
@@ -1060,7 +1105,8 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
                 swiped_user = await UserRepository.get_by_telegram_id(session, swiped_user_id)
                 link = _get_dm_link(swiped_user) if swiped_user else f"tg://user?id={swiped_user_id}"
                 super_kb = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=t(lang, "btn_go_to_dm"), url=link)]
+                    [InlineKeyboardButton(text=t(lang, "btn_go_to_dm"), url=link)],
+                    [get_back_button("main_menu", lang)],
                 ])
                 await callback.message.answer(
                     t(lang, "super_like_message"),
@@ -1116,7 +1162,8 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
                     try:
                         link_to_other = _get_dm_link(swiped_user) if swiped_user else f"tg://user?id={swiped_user_id}"
                         match_kb_swiper = InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text=t(lang, "btn_go_to_dm"), url=link_to_other)]
+                            [InlineKeyboardButton(text=t(lang, "btn_go_to_dm"), url=link_to_other)],
+                            [get_back_button("main_menu", lang)],
                         ])
                         match_msg = t(lang, "match_title") + "\n\n" + t(lang, "match_message")
                         await callback.message.edit_text(match_msg, reply_markup=match_kb_swiper)
@@ -1149,6 +1196,7 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
                     if in_favorites:
                         await _show_next_favorite_or_empty(callback, state, lang, send_new_message=True)
                         break
+                    protect_message(callback.message.chat.id, callback.message.message_id)
                     current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
                     if current_user:
                         async for sess in get_session():

@@ -101,9 +101,25 @@ class SwipeRepository:
         session: AsyncSession,
         swiper_id: int
     ) -> List[int]:
-        """Получение списка ID пользователей, на которых уже свайпнули"""
+        """Получение списка ID пользователей, на которых уже свайпнули (любое действие)."""
         result = await session.execute(
             select(Swipe.swiped_id).where(Swipe.swiper_id == swiper_id)
+        )
+        return [row[0] for row in result.fetchall()]
+
+    @staticmethod
+    async def get_swiped_user_ids_with_actions(
+        session: AsyncSession,
+        swiper_id: int,
+        actions: tuple,
+    ) -> List[int]:
+        """Список ID пользователей, на которых свайпнули с одним из указанных действий (например, ('like', 'bookmark', 'skip'))."""
+        if not actions:
+            return []
+        result = await session.execute(
+            select(Swipe.swiped_id).where(
+                and_(Swipe.swiper_id == swiper_id, Swipe.action.in_(actions))
+            )
         )
         return [row[0] for row in result.fetchall()]
 

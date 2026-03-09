@@ -22,6 +22,7 @@ from keyboards.admin import (
     get_admin_broadcast_keyboard,
     get_admin_keyboard,
     get_admin_clear_confirm_keyboard,
+    get_admin_limits_keyboard,
     get_admin_users_page_keyboard,
     get_admin_live_users_page_keyboard,
     get_admin_user_view_keyboard,
@@ -38,6 +39,7 @@ from keyboards.admin import (
     ADM_PROFILE_PREFIX,
     ADM_SWIPES_PREFIX,
 )
+from services.settings import get_likes_per_week_limit, set_likes_per_week_limit
 from texts.messages import (
     ADMIN_ACCESS_DENIED,
     ADMIN_PANEL_TITLE,
@@ -212,6 +214,54 @@ async def admin_clear_swipes_cancel(callback: CallbackQuery, state: FSMContext) 
         await callback.message.answer(text, reply_markup=get_admin_keyboard())
     await callback.answer(ADMIN_CLEAR_SWIPES_CANCELLED)
     await state.clear()
+
+
+LIMITS_TITLE = "⚙️ <b>Лимиты</b>\n\nОбычные лайки (🤝) — сколько раз в неделю пользователь может поставить лайк (0 = без лимита)."
+
+
+@router.callback_query(AdminCallbackData.filter(F.action == "limits"))
+async def admin_limits(callback: CallbackQuery, state: FSMContext) -> None:
+    """Экран настройки лимитов (лайков в неделю)."""
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+
+    current = get_likes_per_week_limit()
+    text = f"{LIMITS_TITLE}\n\nТекущий лимит лайков в неделю: <b>{current if current > 0 else 'без лимита'}</b>"
+    try:
+        await callback.message.edit_text(text, reply_markup=get_admin_limits_keyboard(current))
+    except Exception:
+        await callback.message.answer(text, reply_markup=get_admin_limits_keyboard(current))
+    await callback.answer()
+
+
+@router.callback_query(AdminCallbackData.filter(F.action.startswith("set_likes_limit_")))
+async def admin_set_likes_limit(callback: CallbackQuery, callback_data: AdminCallbackData, state: FSMContext) -> None:
+    """Установить лимит лайков в неделю (0 = без лимита)."""
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+
+    try:
+        suffix = callback_data.action.replace("set_likes_limit_", "")
+        n = int(suffix)
+    except ValueError:
+        await callback.answer("Ошибка значения", show_alert=True)
+        return
+
+    set_likes_per_week_limit(max(0, n))
+    current = get_likes_per_week_limit()
+    text = f"{LIMITS_TITLE}\n\nТекущий лимит лайков в неделю: <b>{current if current > 0 else 'без лимита'}</b>"
+    try:
+        await callback.message.edit_text(text, reply_markup=get_admin_limits_keyboard(current))
+    except Exception:
+        await callback.message.answer(text, reply_markup=get_admin_limits_keyboard(current))
+    label = "без лимита" if current == 0 else str(current)
+    await callback.answer(f"Лимит лайков установлен: {label}")
 
 
 @router.callback_query(AdminCallbackData.filter(F.action == "back"))

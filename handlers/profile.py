@@ -450,39 +450,6 @@ async def show_people(callback: CallbackQuery, state: FSMContext) -> None:
         await state.update_data(last_bot_message_id=sent.message_id)
 
 
-@router.callback_query(F.data == "search_people")
-async def search_people(callback: CallbackQuery, state: FSMContext) -> None:
-    """Поиск людей"""
-    await callback.answer()
-    await state.update_data(profile_screen="search")
-    from keyboards.menu import get_people_keyboard
-
-    lang = "ru"
-    async for s in get_session():
-        u = await UserRepository.get_by_telegram_id(s, callback.from_user.id)
-        if u:
-            lang = getattr(u, "language", None) or "ru"
-        break
-    text = t(lang, "people_search") + "\n\n" + t(lang, "people_search_coming_soon")
-
-    try:
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_people_keyboard(lang)
-        )
-        await state.update_data(last_bot_message_id=callback.message.message_id)
-    except Exception:
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-        sent = await callback.message.answer(
-            text,
-            reply_markup=get_people_keyboard(lang)
-        )
-        await state.update_data(last_bot_message_id=sent.message_id)
-
-
 async def _show_favorite_at_index(
     callback: CallbackQuery,
     state: FSMContext,

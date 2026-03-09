@@ -11,6 +11,7 @@ from aiogram.enums import ParseMode
 
 from config import Config
 from init_db import init_database
+from middlewares.db_session import DbSessionMiddleware
 from middlewares.auth import AuthMiddleware
 from middlewares.throttling import ThrottlingMiddleware
 from middlewares.delete_previous import BotDeletePrevious, DeletePreviousMiddleware
@@ -41,7 +42,9 @@ async def main() -> None:
     )
     dp = Dispatcher()
     
-    # Регистрация middleware
+    # Регистрация middleware (DbSession — первым, чтобы одна сессия на запрос)
+    dp.message.middleware(DbSessionMiddleware())
+    dp.callback_query.middleware(DbSessionMiddleware())
     dp.message.middleware(DeletePreviousMiddleware())
     dp.callback_query.middleware(DeletePreviousMiddleware())
     dp.message.middleware(ThrottlingMiddleware())
@@ -73,3 +76,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+  

@@ -167,4 +167,10 @@ def get_favorites_keyboard(
         )
     if nav_buttons:
         builder.row(*nav_buttons)
+    builder.row(
+        InlineKeyboardButton(
+            text=t(lang, "favorites_back_to_people"),
+            callback_data="people",
+        ),
+    )
     return builder.as_markup()

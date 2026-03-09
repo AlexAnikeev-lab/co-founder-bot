@@ -59,7 +59,6 @@ def get_profile_keyboard(is_minor: bool = False, lang: str = "ru") -> InlineKeyb
 def get_people_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     """Меню раздела Люди (язык: ru/en)."""
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text=t(lang, "people_search"), callback_data="search_people"))
     builder.add(InlineKeyboardButton(text=t(lang, "people_favorites"), callback_data="favorites"))
     builder.add(InlineKeyboardButton(text=t(lang, "people_matches"), callback_data="matches"))
     builder.adjust(1)
