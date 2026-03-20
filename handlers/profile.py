@@ -1143,9 +1143,15 @@ async def _process_edit_quality(
         invalid_ids = list(data.get("invalid_user_message_ids") or [])
         invalid_ids.append(message.message_id)
         await state.update_data(invalid_user_message_ids=invalid_ids)
+        length = len((message.text or "").strip())
+        base_err = t(lang, "edit_quality_error")
+        if lang == "ru":
+            base_err = f"{base_err} Сейчас у тебя: {length}."
+        else:
+            base_err = f"{base_err} You now have: {length}."
+        err_text = base_err
         if last_msg_id:
             try:
-                err_text = t(lang, "edit_quality_error") + "\n\n" + request_text
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
@@ -1153,7 +1159,13 @@ async def _process_edit_quality(
                     reply_markup=None,
                 )
             except Exception:
-                pass
+                from keyboards.common import get_cancel_button
+                sent = await message.answer(err_text, reply_markup=get_cancel_button(lang))
+                await state.update_data(last_bot_message_id=sent.message_id)
+        else:
+            from keyboards.common import get_cancel_button
+            sent = await message.answer(err_text, reply_markup=get_cancel_button(lang))
+            await state.update_data(last_bot_message_id=sent.message_id)
         return
 
     if text_contains_emoji(message.text):

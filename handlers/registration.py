@@ -6,6 +6,7 @@ import logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from states.registration import RegistrationStates
 from texts.messages import (
@@ -35,11 +36,9 @@ from keyboards.common import (
     get_contact_request_keyboard,
     get_language_keyboard,
 )
-from keyboards.menu import get_main_menu_keyboard
-from keyboards.test import get_post_registration_offer_keyboard
+from keyboards.test import get_post_registration_offer_keyboard, get_post_registration_minor_keyboard
 from repositories.user_repository import UserRepository
 from repositories.admin_archive_repository import AdminArchiveRepository
-from repositories.database import get_session
 from config import Config
 from utils.validators import (
     validate_age,
@@ -52,6 +51,7 @@ from utils.validators import (
 )
 from utils.errors import handle_error, notify_admin_new_user
 from utils.registration_photos import show_registration_step
+from middlewares.delete_previous import protect_message
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -255,6 +255,12 @@ async def start_learning_mode(callback: CallbackQuery, state: FSMContext) -> Non
                     reply_markup=get_cancel_button(lang),
                 )
             await state.update_data(last_bot_message_id=callback.message.message_id)
+
+            keyboard_msg = await callback.message.answer(
+                t(lang, "contact_request_hint"),
+                reply_markup=get_contact_request_keyboard(lang),
+            )
+            await state.update_data(keyboard_message_id=keyboard_msg.message_id)
             await state.set_state(RegistrationStates.waiting_for_telegram_access)
             
     except Exception as e:
@@ -302,13 +308,22 @@ async def accept_legal(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(RegistrationStates.waiting_for_telegram_access, F.contact)
-async def process_telegram_access_contact(message: Message, state: FSMContext) -> None:
+async def process_telegram_access_contact(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+) -> None:
     """Обработка контакта с телефоном"""
-    await process_telegram_access(message, state, phone=message.contact.phone_number)
+    await process_telegram_access(message, state, phone=message.contact.phone_number, session=session)
 
 
 @router.message(RegistrationStates.waiting_for_telegram_access)
-async def process_telegram_access(message: Message, state: FSMContext, phone: str = None) -> None:
+async def process_telegram_access(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    phone: str = None,
+) -> None:
     """Обработка доступа к Telegram данным"""
     try:
         # Удаляем сообщение пользователя
@@ -350,41 +365,36 @@ async def process_telegram_access(message: Message, state: FSMContext, phone: st
                 await state.update_data(keyboard_message_id=keyboard_msg.message_id)
             return
 
-        async for session in get_session():
-            user = await UserRepository.get_by_telegram_id(
+        user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
+        if not user:
+            user = await UserRepository.create(
                 session,
-                message.from_user.id
+                telegram_id=message.from_user.id,
+                username=message.from_user.username
             )
-            if not user:
-                user = await UserRepository.create(
-                    session,
-                    telegram_id=message.from_user.id,
-                    username=message.from_user.username
-                )
-            phone_number = phone or (message.contact.phone_number if message.contact else None)
-            await UserRepository.update(
-                session, user,
-                age=data.get("age"), is_minor=is_minor, phone=phone_number,
-                language=data.get("language", "ru"),
-            )
+        phone_number = phone or (message.contact.phone_number if message.contact else None)
+        await UserRepository.update(
+            session, user,
+            age=data.get("age"), is_minor=is_minor, phone=phone_number,
+            language=data.get("language", "ru"),
+        )
 
-            name_text = t(lang, "name_request") if is_minor else t(lang, "name_request_profile")
-            # Редактируем предыдущее сообщение (с «Allow access») в запрос имени, чтобы не слать второе сообщение
-            mid2 = await show_registration_step(
-                message.bot, message.chat.id, last_msg_id, "name", name_text, get_cancel_button(lang), lang=lang,
-            )
-            if mid2 is not None:
-                await state.update_data(last_bot_message_id=mid2, keyboard_message_id=None)
-            else:
-                if last_msg_id:
-                    try:
-                        await message.bot.delete_message(chat_id=message.chat.id, message_id=last_msg_id)
-                    except Exception:
-                        pass
-                sent = await message.answer(name_text, reply_markup=get_cancel_button(lang))
-                await state.update_data(last_bot_message_id=sent.message_id, keyboard_message_id=None)
-            await state.set_state(RegistrationStates.waiting_for_name)
-            break
+        name_text = t(lang, "name_request") if is_minor else t(lang, "name_request_profile")
+        # Редактируем предыдущее сообщение (с «Allow access») в запрос имени, чтобы не слать второе сообщение
+        mid2 = await show_registration_step(
+            message.bot, message.chat.id, last_msg_id, "name", name_text, get_cancel_button(lang), lang=lang,
+        )
+        if mid2 is not None:
+            await state.update_data(last_bot_message_id=mid2, keyboard_message_id=None)
+        else:
+            if last_msg_id:
+                try:
+                    await message.bot.delete_message(chat_id=message.chat.id, message_id=last_msg_id)
+                except Exception:
+                    pass
+            sent = await message.answer(name_text, reply_markup=get_cancel_button(lang))
+            await state.update_data(last_bot_message_id=sent.message_id, keyboard_message_id=None)
+        await state.set_state(RegistrationStates.waiting_for_name)
 
     except Exception as e:
         logger.error(f"Ошибка в process_telegram_access: {e}", exc_info=True)
@@ -407,7 +417,11 @@ async def process_telegram_access(message: Message, state: FSMContext, phone: st
 
 
 @router.message(RegistrationStates.waiting_for_name)
-async def process_name(message: Message, state: FSMContext) -> None:
+async def process_name(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+) -> None:
     """Обработка имени"""
     try:
         try:
@@ -425,7 +439,7 @@ async def process_name(message: Message, state: FSMContext) -> None:
         lang = data.get("language", "ru")
         if not validate_name(message.text):
             name_text = t(lang, "name_request") if data.get("is_minor") else t(lang, "name_request_profile")
-            err_text = "❌ " + ("Имя: от 2 до 50 символов, только буквы." if lang == "ru" else "Name: 2–50 characters, letters only.") + "\n\n" + name_text
+            err_text = "❌ " + ("Имя: от 2 до 40 символов, только буквы." if lang == "ru" else "Name: 2–40 characters, letters only.") + "\n\n" + name_text
             if await show_registration_step(message.bot, message.chat.id, last_msg_id, "name", err_text, get_cancel_button(lang), lang=lang) is None:
                 try:
                     await message.bot.edit_message_text(
@@ -443,26 +457,38 @@ async def process_name(message: Message, state: FSMContext) -> None:
 
         lang = data.get("language", "ru")
         if is_minor:
-            async for session in get_session():
-                user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
-                if user:
-                    await UserRepository.update(session, user, name=message.text, is_registered=True, language=lang)
-                    success_text = t(lang, "success_registration")
-                    mid2 = await show_registration_step(
-                        message.bot, message.chat.id, last_msg_id, "success",
-                        success_text, None, lang=lang,
+            user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
+            if user:
+                await UserRepository.update(
+                    session,
+                    user,
+                    name=message.text,
+                    is_registered=True,
+                    language=lang,
+                )
+                success_text = t(lang, "success_registration")
+                mid2 = await show_registration_step(
+                    message.bot,
+                    message.chat.id,
+                    last_msg_id,
+                    "success",
+                    success_text,
+                    None,
+                    lang=lang,
+                )
+                if mid2 is None:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text=success_text,
+                        reply_markup=get_post_registration_minor_keyboard(lang=lang),
                     )
-                    if mid2 is None:
-                        await message.bot.edit_message_text(
-                            chat_id=message.chat.id,
-                            message_id=last_msg_id,
-                            text=success_text,
-                            reply_markup=get_main_menu_keyboard(is_minor=True, lang=lang),
-                        )
-                    else:
-                        await message.answer("🏠", reply_markup=get_main_menu_keyboard(is_minor=True, lang=lang))
-                    await state.clear()
-                break
+                else:
+                    await message.answer(
+                        success_text,
+                        reply_markup=get_post_registration_minor_keyboard(lang=lang),
+                    )
+                await state.clear()
         else:
             photo_text = t(lang, "photo_request")
             mid2 = await show_registration_step(
@@ -529,7 +555,8 @@ async def process_photo(message: Message, state: FSMContext) -> None:
             q1_text, get_skip_and_cancel_keyboard(lang), lang=lang,
         )
         if mid2 is not None:
-            await state.update_data(last_bot_message_id=mid2)
+            await state.update_data(last_bot_message_id=mid2, quality_step_message_ids=[mid2])
+            protect_message(message.chat.id, mid2)
         elif last_msg_id:
             try:
                 await message.bot.edit_message_text(
@@ -540,10 +567,12 @@ async def process_photo(message: Message, state: FSMContext) -> None:
                 )
             except Exception:
                 sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard(lang))
-                await state.update_data(last_bot_message_id=sent.message_id)
+                await state.update_data(last_bot_message_id=sent.message_id, quality_step_message_ids=[sent.message_id])
+                protect_message(message.chat.id, sent.message_id)
         else:
             sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard(lang))
-            await state.update_data(last_bot_message_id=sent.message_id)
+            await state.update_data(last_bot_message_id=sent.message_id, quality_step_message_ids=[sent.message_id])
+            protect_message(message.chat.id, sent.message_id)
 
         await state.set_state(RegistrationStates.waiting_for_quality_1)
 
@@ -591,19 +620,33 @@ async def process_photo_invalid(message: Message, state: FSMContext) -> None:
 async def process_short_description(message: Message, state: FSMContext) -> None:
     """Обработка краткого описания"""
     try:
-        try:
-            await message.delete()
-        except Exception:
-            pass
-
         data = await state.get_data()
         last_msg_id = data.get("last_bot_message_id")
+        # Защищаем шаговые сообщения описаний от автоудаления middleware
+        step_ids = list(data.get("description_step_message_ids") or [])
+        protect_targets = []
+        if last_msg_id:
+            protect_targets.append(last_msg_id)
+        protect_targets.extend(step_ids)
+        for mid in dict.fromkeys(protect_targets):
+            try:
+                protect_message(message.chat.id, int(mid))
+            except Exception:
+                pass
         
         lang = data.get("language", "ru")
         if not validate_short_description(message.text):
+            invalid_ids = list(data.get("invalid_user_message_ids") or [])
+            invalid_ids.append(message.message_id)
+            await state.update_data(invalid_user_message_ids=invalid_ids)
+            length = len((message.text or "").strip())
+            err = (
+                ("❌ Краткое описание: от 10 до 180 символов, сейчас у тебя: " if lang == "ru" else "❌ Short description: 10–180 characters, you now have: ")
+                + str(length)
+                + "."
+            )
             if last_msg_id:
                 try:
-                    err = "❌ " + ("Краткое описание: от 10 до 200 символов." if lang == "ru" else "Short description: 10–200 characters.") + "\n\n" + t(lang, "short_description_request") + t(lang, "reg_skip_hint")
                     await message.bot.edit_message_text(
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
@@ -611,31 +654,75 @@ async def process_short_description(message: Message, state: FSMContext) -> None
                         reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
-                    pass
+                    sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(
+                        last_bot_message_id=sent.message_id,
+                        last_short_description_error_message_id=sent.message_id,
+                    )
+            else:
+                sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(
+                    last_bot_message_id=sent.message_id,
+                    last_short_description_error_message_id=sent.message_id,
+                )
             return
+
+        # Удаляем неудачные попытки ввода описания
+        for mid in (data.get("invalid_user_message_ids") or []):
+            try:
+                await message.bot.delete_message(chat_id=message.chat.id, message_id=mid)
+            except Exception:
+                pass
+        # Удаляем отдельное сообщение-ошибку, если отправляли ранее
+        err_mid = data.get("last_short_description_error_message_id")
+        if err_mid:
+            try:
+                await message.bot.delete_message(chat_id=message.chat.id, message_id=err_mid)
+            except Exception:
+                pass
+        # Как в шагах сильных сторон: оставляем сообщения, но снимаем с них кнопки
+        step_ids = list(data.get("description_step_message_ids") or [])
+        targets = []
+        if last_msg_id:
+            targets.append(last_msg_id)
+        targets.extend(step_ids)
+        for mid in dict.fromkeys(targets):
+            try:
+                await message.bot.edit_message_reply_markup(
+                    chat_id=message.chat.id,
+                    message_id=mid,
+                    reply_markup=None,
+                )
+            except Exception:
+                pass
 
         await state.update_data(short_description=message.text)
         full_text = t(lang, "full_description_request") + t(lang, "reg_skip_hint")
         mid2 = await show_registration_step(
-            message.bot, message.chat.id, last_msg_id, "full_desc",
+            message.bot, message.chat.id, None, "full_desc",
             full_text, get_skip_and_cancel_keyboard(lang), lang=lang,
         )
         if mid2 is not None:
-            await state.update_data(last_bot_message_id=mid2)
-        elif last_msg_id:
-            try:
-                await message.bot.edit_message_text(
-                    chat_id=message.chat.id,
-                    message_id=last_msg_id,
-                    text=full_text,
-                    reply_markup=get_skip_and_cancel_keyboard(lang),
-                )
-            except Exception:
-                sent = await message.answer(full_text, reply_markup=get_skip_and_cancel_keyboard(lang))
-                await state.update_data(last_bot_message_id=sent.message_id)
+            mids = list(data.get("description_step_message_ids") or [])
+            mids.append(mid2)
+            await state.update_data(
+                last_bot_message_id=mid2,
+                last_short_description_error_message_id=None,
+                description_step_message_ids=mids,
+                invalid_user_message_ids=[],
+            )
+            protect_message(message.chat.id, mid2)
         else:
             sent = await message.answer(full_text, reply_markup=get_skip_and_cancel_keyboard(lang))
-            await state.update_data(last_bot_message_id=sent.message_id)
+            mids = list(data.get("description_step_message_ids") or [])
+            mids.append(sent.message_id)
+            await state.update_data(
+                last_bot_message_id=sent.message_id,
+                last_short_description_error_message_id=None,
+                description_step_message_ids=mids,
+                invalid_user_message_ids=[],
+            )
+            protect_message(message.chat.id, sent.message_id)
 
         await state.set_state(RegistrationStates.waiting_for_full_description)
 
@@ -645,22 +732,40 @@ async def process_short_description(message: Message, state: FSMContext) -> None
 
 
 @router.message(RegistrationStates.waiting_for_full_description)
-async def process_full_description(message: Message, state: FSMContext) -> None:
+async def process_full_description(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+) -> None:
     """Обработка полного описания"""
     try:
-        try:
-            await message.delete()
-        except Exception:
-            pass
-
         data = await state.get_data()
         last_msg_id = data.get("last_bot_message_id")
+        # Защищаем шаговые сообщения описаний от автоудаления middleware
+        step_ids = list(data.get("description_step_message_ids") or [])
+        protect_targets = []
+        if last_msg_id:
+            protect_targets.append(last_msg_id)
+        protect_targets.extend(step_ids)
+        for mid in dict.fromkeys(protect_targets):
+            try:
+                protect_message(message.chat.id, int(mid))
+            except Exception:
+                pass
         
         lang = data.get("language", "ru")
         if not validate_full_description(message.text):
+            invalid_ids = list(data.get("invalid_user_message_ids") or [])
+            invalid_ids.append(message.message_id)
+            await state.update_data(invalid_user_message_ids=invalid_ids)
+            length = len((message.text or "").strip())
+            err = (
+                ("❌ Полное описание: от 20 до 500 символов, сейчас у тебя: " if lang == "ru" else "❌ Full description: 20–500 characters, you now have: ")
+                + str(length)
+                + "."
+            )
             if last_msg_id:
                 try:
-                    err = "❌ " + ("Полное описание: от 20 до 1000 символов." if lang == "ru" else "Full description: 20–1000 characters.") + "\n\n" + t(lang, "full_description_request") + t(lang, "reg_skip_hint")
                     await message.bot.edit_message_text(
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
@@ -668,12 +773,51 @@ async def process_full_description(message: Message, state: FSMContext) -> None:
                         reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
-                    pass
+                    sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(
+                        last_bot_message_id=sent.message_id,
+                        last_full_description_error_message_id=sent.message_id,
+                    )
+            else:
+                sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(
+                    last_bot_message_id=sent.message_id,
+                    last_full_description_error_message_id=sent.message_id,
+                )
             return
 
-        await state.update_data(full_description=message.text)
+        # Удаляем неудачные попытки ввода полного описания
+        for mid in (data.get("invalid_user_message_ids") or []):
+            try:
+                await message.bot.delete_message(chat_id=message.chat.id, message_id=mid)
+            except Exception:
+                pass
+        # Удаляем отдельное сообщение-ошибку, если было
+        err_mid = data.get("last_full_description_error_message_id")
+        if err_mid:
+            try:
+                await message.bot.delete_message(chat_id=message.chat.id, message_id=err_mid)
+            except Exception:
+                pass
+        # Оставляем сообщения шага, но убираем с них кнопки
+        step_ids = list(data.get("description_step_message_ids") or [])
+        targets = []
+        if last_msg_id:
+            targets.append(last_msg_id)
+        targets.extend(step_ids)
+        for mid in dict.fromkeys(targets):
+            try:
+                await message.bot.edit_message_reply_markup(
+                    chat_id=message.chat.id,
+                    message_id=mid,
+                    reply_markup=None,
+                )
+            except Exception:
+                pass
+
+        await state.update_data(full_description=message.text, invalid_user_message_ids=[])
         data = await state.get_data()
-        await _complete_registration(message, state, data)
+        await _complete_registration(message, state, data, session=session)
 
     except Exception as e:
         logger.error(f"Ошибка в process_full_description: {e}", exc_info=True)
@@ -692,68 +836,60 @@ def _build_qualities_string(data: dict) -> str | None:
 
 
 async def _complete_registration(
-    message: Message, state: FSMContext, data: dict, *, user_id: int | None = None
+    message: Message,
+    state: FSMContext,
+    data: dict,
+    *,
+    session: AsyncSession,
+    user_id: int | None = None,
 ) -> None:
     """Сохранить профиль в БД и показать экран завершения регистрации. user_id задаётся при вызове из callback."""
     uid = user_id if user_id is not None else message.from_user.id
     qualities = _build_qualities_string(data)
-    async for session in get_session():
-        user = await UserRepository.get_by_telegram_id(session, uid)
-        if user:
-            await UserRepository.update(
-                session,
-                user,
-                name=data.get("name"),
-                photo_id=data.get("photo_id"),
-                short_description=data.get("short_description"),
-                full_description=data.get("full_description"),
-                qualities=qualities,
-                is_registered=True,
-                language=data.get("language", "ru"),
+    user = await UserRepository.get_by_telegram_id(session, uid)
+    if user:
+        await UserRepository.update(
+            session,
+            user,
+            name=data.get("name"),
+            photo_id=data.get("photo_id"),
+            short_description=data.get("short_description"),
+            full_description=data.get("full_description"),
+            qualities=qualities,
+            is_registered=True,
+            language=data.get("language", "ru"),
+        )
+        await session.refresh(user)
+        try:
+            await AdminArchiveRepository.create_from_user(session, user)
+        except Exception as e:
+            logger.exception("Ошибка сохранения в архив админа: %s", e)
+        try:
+            await notify_admin_new_user(
+                message.bot,
+                user.name or "",
+                user.telegram_id,
+                user.username,
             )
-            await session.refresh(user)
-            try:
-                await AdminArchiveRepository.create_from_user(session, user)
-            except Exception as e:
-                logger.exception("Ошибка сохранения в архив админа: %s", e)
-            try:
-                await notify_admin_new_user(
-                    message.bot,
-                    user.name or "",
-                    user.telegram_id,
-                    user.username,
-                )
-            except Exception as e:
-                logger.exception("Ошибка уведомления о новом пользователе: %s", e)
-            last_msg_id = data.get("last_bot_message_id")
-            lang = data.get("language", "ru")
-            success_text = t(lang, "success_registration_offer_test")
-            mid2 = await show_registration_step(
-                message.bot, message.chat.id, last_msg_id, "success",
-                success_text,
-                get_post_registration_offer_keyboard(lang=lang),
-                lang=lang,
-            )
-            if mid2 is not None:
-                pass
-            elif last_msg_id:
-                try:
-                    await message.bot.edit_message_text(
-                        chat_id=message.chat.id,
-                        message_id=last_msg_id,
-                        text=success_text,
-                        reply_markup=get_post_registration_offer_keyboard(lang=lang),
-                    )
-                except Exception:
-                    await message.answer(success_text, reply_markup=get_post_registration_offer_keyboard(lang=lang))
-            else:
-                await message.answer(success_text, reply_markup=get_post_registration_offer_keyboard(lang=lang))
-            await state.clear()
-        break
+        except Exception as e:
+            logger.exception("Ошибка уведомления о новом пользователе: %s", e)
+        lang = data.get("language", "ru")
+        success_text = t(lang, "success_registration_offer_test")
+        # По требованию UX: после полной регистрации отправляем отдельное новое сообщение,
+        # не редактируя предыдущие шаги регистрации.
+        await message.answer(
+            success_text,
+            reply_markup=get_post_registration_offer_keyboard(lang=lang),
+        )
+        await state.clear()
 
 
 @router.callback_query(F.data == "reg_skip")
-async def reg_skip(callback: CallbackQuery, state: FSMContext) -> None:
+async def reg_skip(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session: AsyncSession,
+) -> None:
     """Обработка кнопки «Пропустить» на шагах: краткое/полное описание, качества 1–3."""
     await callback.answer()
     try:
@@ -767,17 +903,35 @@ async def reg_skip(callback: CallbackQuery, state: FSMContext) -> None:
         if current == RegistrationStates.waiting_for_short_description.state:
             await state.update_data(short_description=None)
             text = t(lang, "full_description_request") + t(lang, "reg_skip_hint")
-            if await show_registration_step(bot, msg.chat.id, last_msg_id, "full_desc", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
+            mid2 = await show_registration_step(
+                bot, msg.chat.id, last_msg_id, "full_desc", text, get_skip_and_cancel_keyboard(lang), lang=lang
+            )
+            if mid2 is None:
                 try:
                     await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
                 except Exception:
-                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    mids = list((await state.get_data()).get("description_step_message_ids") or [])
+                    mids.append(sent.message_id)
+                    await state.update_data(last_bot_message_id=sent.message_id, description_step_message_ids=mids)
+                    protect_message(msg.chat.id, sent.message_id)
+            else:
+                mids = list((await state.get_data()).get("description_step_message_ids") or [])
+                mids.append(mid2)
+                await state.update_data(last_bot_message_id=mid2, description_step_message_ids=mids)
+                protect_message(msg.chat.id, mid2)
             await state.set_state(RegistrationStates.waiting_for_full_description)
             return
         if current == RegistrationStates.waiting_for_full_description.state:
             await state.update_data(full_description=None)
             data = await state.get_data()
-            await _complete_registration(msg, state, data, user_id=callback.from_user.id)
+            await _complete_registration(
+                msg,
+                state,
+                data,
+                session=session,
+                user_id=callback.from_user.id,
+            )
             return
         if current == RegistrationStates.waiting_for_quality_1.state:
             await state.update_data(quality_1=None)
@@ -820,20 +974,44 @@ async def reg_skip(callback: CallbackQuery, state: FSMContext) -> None:
         if current == RegistrationStates.waiting_for_quality_3.state:
             await state.update_data(quality_3=None)
             text = t(lang, "short_description_request") + t(lang, "reg_skip_hint")
-            if await show_registration_step(bot, msg.chat.id, last_msg_id, "short_desc", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
+            mid2 = await show_registration_step(
+                bot, msg.chat.id, last_msg_id, "short_desc", text, get_skip_and_cancel_keyboard(lang), lang=lang
+            )
+            if mid2 is None:
                 try:
                     await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
                 except Exception:
-                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    mids = list((await state.get_data()).get("description_step_message_ids") or [])
+                    mids.append(sent.message_id)
+                    await state.update_data(last_bot_message_id=sent.message_id, description_step_message_ids=mids)
+                    protect_message(msg.chat.id, sent.message_id)
+            else:
+                mids = list((await state.get_data()).get("description_step_message_ids") or [])
+                mids.append(mid2)
+                await state.update_data(last_bot_message_id=mid2, description_step_message_ids=mids)
+                protect_message(msg.chat.id, mid2)
             await state.set_state(RegistrationStates.waiting_for_short_description)
             return
         if current == RegistrationStates.waiting_for_quality_3_emoji.state:
             text = t(lang, "short_description_request") + t(lang, "reg_skip_hint")
-            if await show_registration_step(bot, msg.chat.id, last_msg_id, "short_desc", text, get_skip_and_cancel_keyboard(lang), lang=lang) is None:
+            mid2 = await show_registration_step(
+                bot, msg.chat.id, last_msg_id, "short_desc", text, get_skip_and_cancel_keyboard(lang), lang=lang
+            )
+            if mid2 is None:
                 try:
                     await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
                 except Exception:
-                    await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    mids = list((await state.get_data()).get("description_step_message_ids") or [])
+                    mids.append(sent.message_id)
+                    await state.update_data(last_bot_message_id=sent.message_id, description_step_message_ids=mids)
+                    protect_message(msg.chat.id, sent.message_id)
+            else:
+                mids = list((await state.get_data()).get("description_step_message_ids") or [])
+                mids.append(mid2)
+                await state.update_data(last_bot_message_id=mid2, description_step_message_ids=mids)
+                protect_message(msg.chat.id, mid2)
             await state.set_state(RegistrationStates.waiting_for_short_description)
     except Exception as e:
         logger.error(f"Ошибка в reg_skip: {e}", exc_info=True)
@@ -852,6 +1030,11 @@ async def _cleanup_quality_warnings_and_attempts(bot, chat_id: int, data: dict) 
             await bot.delete_message(chat_id=chat_id, message_id=data["last_warning_message_id"])
         except Exception:
             pass
+    if data.get("last_quality_error_message_id"):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=data["last_quality_error_message_id"])
+        except Exception:
+            pass
 
 
 @router.message(RegistrationStates.waiting_for_quality_1)
@@ -865,9 +1048,14 @@ async def process_quality_1(message: Message, state: FSMContext) -> None:
             invalid_ids = list(data.get("invalid_user_message_ids") or [])
             invalid_ids.append(message.message_id)
             await state.update_data(invalid_user_message_ids=invalid_ids)
+            length = len((message.text or "").strip())
+            err = (
+                ("❌ Укажи качество от 2 до 40 символов, сейчас у тебя: " if lang == "ru" else "❌ Enter 2–40 characters, you now have: ")
+                + str(length)
+                + "."
+            )
             if last_msg_id:
                 try:
-                    err = "❌ " + ("Укажи качество от 2 до 50 символов." if lang == "ru" else "Enter 2–50 characters.") + "\n\n" + t(lang, "quality_1_request") + t(lang, "reg_skip_hint")
                     await message.bot.edit_message_text(
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
@@ -875,7 +1063,17 @@ async def process_quality_1(message: Message, state: FSMContext) -> None:
                         reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
-                    pass
+                    sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(
+                        last_bot_message_id=sent.message_id,
+                        last_quality_error_message_id=sent.message_id,
+                    )
+            else:
+                sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(
+                    last_bot_message_id=sent.message_id,
+                    last_quality_error_message_id=sent.message_id,
+                )
             return
         if text_contains_emoji(message.text):
             invalid_ids = list(data.get("invalid_user_message_ids") or [])
@@ -887,24 +1085,31 @@ async def process_quality_1(message: Message, state: FSMContext) -> None:
             )
             return
         await _cleanup_quality_warnings_and_attempts(message.bot, message.chat.id, data)
-        await state.update_data(quality_1=message.text.strip(), invalid_user_message_ids=[], last_warning_message_id=None)
+        step_ids = list(data.get("quality_step_message_ids") or [])
+        targets = []
+        if last_msg_id:
+            targets.append(last_msg_id)
+        targets.extend(step_ids)
+        for mid in dict.fromkeys(targets):
+            try:
+                await message.bot.edit_message_reply_markup(
+                    chat_id=message.chat.id,
+                    message_id=mid,
+                    reply_markup=None,
+                )
+            except Exception:
+                pass
+        await state.update_data(
+            quality_1=message.text.strip(),
+            invalid_user_message_ids=[],
+            last_warning_message_id=None,
+            last_quality_error_message_id=None,
+        )
         text = t(lang, "quality_emoji_prompt")
         from keyboards.quality_emoji import get_quality_emoji_keyboard
         kb = get_quality_emoji_keyboard(1, prefix="reg", lang=lang)
-        try:
-            if last_msg_id:
-                await message.bot.edit_message_text(
-                    chat_id=message.chat.id,
-                    message_id=last_msg_id,
-                    text=text,
-                    reply_markup=kb,
-                )
-            else:
-                sent = await message.answer(text, reply_markup=kb)
-                await state.update_data(last_bot_message_id=sent.message_id)
-        except Exception:
-            sent = await message.answer(text, reply_markup=kb)
-            await state.update_data(last_bot_message_id=sent.message_id)
+        # Показываем выбор смайлика отдельным сообщением, не трогая карточку с «Сильная сторона №1»
+        await message.answer(text, reply_markup=kb)
         await state.set_state(RegistrationStates.waiting_for_quality_1_emoji)
     except Exception as e:
         logger.error(f"Ошибка в process_quality_1: {e}", exc_info=True)
@@ -922,9 +1127,14 @@ async def process_quality_2(message: Message, state: FSMContext) -> None:
             invalid_ids = list(data.get("invalid_user_message_ids") or [])
             invalid_ids.append(message.message_id)
             await state.update_data(invalid_user_message_ids=invalid_ids)
+            length = len((message.text or "").strip())
+            err = (
+                ("❌ Укажи качество от 2 до 40 символов, сейчас у тебя: " if lang == "ru" else "❌ Enter 2–40 characters, you now have: ")
+                + str(length)
+                + "."
+            )
             if last_msg_id:
                 try:
-                    err = "❌ " + ("Укажи качество от 2 до 50 символов." if lang == "ru" else "Enter 2–50 characters.") + "\n\n" + t(lang, "quality_2_request") + t(lang, "reg_skip_hint")
                     await message.bot.edit_message_text(
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
@@ -932,7 +1142,17 @@ async def process_quality_2(message: Message, state: FSMContext) -> None:
                         reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
-                    pass
+                    sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(
+                        last_bot_message_id=sent.message_id,
+                        last_quality_error_message_id=sent.message_id,
+                    )
+            else:
+                sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(
+                    last_bot_message_id=sent.message_id,
+                    last_quality_error_message_id=sent.message_id,
+                )
             return
         if text_contains_emoji(message.text):
             invalid_ids = list(data.get("invalid_user_message_ids") or [])
@@ -944,24 +1164,31 @@ async def process_quality_2(message: Message, state: FSMContext) -> None:
             )
             return
         await _cleanup_quality_warnings_and_attempts(message.bot, message.chat.id, data)
-        await state.update_data(quality_2=message.text.strip(), invalid_user_message_ids=[], last_warning_message_id=None)
+        step_ids = list(data.get("quality_step_message_ids") or [])
+        targets = []
+        if last_msg_id:
+            targets.append(last_msg_id)
+        targets.extend(step_ids)
+        for mid in dict.fromkeys(targets):
+            try:
+                await message.bot.edit_message_reply_markup(
+                    chat_id=message.chat.id,
+                    message_id=mid,
+                    reply_markup=None,
+                )
+            except Exception:
+                pass
+        await state.update_data(
+            quality_2=message.text.strip(),
+            invalid_user_message_ids=[],
+            last_warning_message_id=None,
+            last_quality_error_message_id=None,
+        )
         text = t(lang, "quality_emoji_prompt")
         from keyboards.quality_emoji import get_quality_emoji_keyboard
         kb = get_quality_emoji_keyboard(2, prefix="reg", lang=lang)
-        try:
-            if last_msg_id:
-                await message.bot.edit_message_text(
-                    chat_id=message.chat.id,
-                    message_id=last_msg_id,
-                    text=text,
-                    reply_markup=kb,
-                )
-            else:
-                sent = await message.answer(text, reply_markup=kb)
-                await state.update_data(last_bot_message_id=sent.message_id)
-        except Exception:
-            sent = await message.answer(text, reply_markup=kb)
-            await state.update_data(last_bot_message_id=sent.message_id)
+        # Тоже отдельное сообщение, карточка «Сильная сторона №2» остаётся
+        await message.answer(text, reply_markup=kb)
         await state.set_state(RegistrationStates.waiting_for_quality_2_emoji)
     except Exception as e:
         logger.error(f"Ошибка в process_quality_2: {e}", exc_info=True)
@@ -979,9 +1206,14 @@ async def process_quality_3(message: Message, state: FSMContext) -> None:
             invalid_ids = list(data.get("invalid_user_message_ids") or [])
             invalid_ids.append(message.message_id)
             await state.update_data(invalid_user_message_ids=invalid_ids)
+            length = len((message.text or "").strip())
+            err = (
+                ("❌ Укажи качество от 2 до 40 символов, сейчас у тебя: " if lang == "ru" else "❌ Enter 2–40 characters, you now have: ")
+                + str(length)
+                + "."
+            )
             if last_msg_id:
                 try:
-                    err = "❌ " + ("Укажи качество от 2 до 50 символов." if lang == "ru" else "Enter 2–50 characters.") + "\n\n" + t(lang, "quality_3_request") + t(lang, "reg_skip_hint")
                     await message.bot.edit_message_text(
                         chat_id=message.chat.id,
                         message_id=last_msg_id,
@@ -989,7 +1221,17 @@ async def process_quality_3(message: Message, state: FSMContext) -> None:
                         reply_markup=get_skip_and_cancel_keyboard(lang),
                     )
                 except Exception:
-                    pass
+                    sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(
+                        last_bot_message_id=sent.message_id,
+                        last_quality_error_message_id=sent.message_id,
+                    )
+            else:
+                sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(
+                    last_bot_message_id=sent.message_id,
+                    last_quality_error_message_id=sent.message_id,
+                )
             return
         if text_contains_emoji(message.text):
             invalid_ids = list(data.get("invalid_user_message_ids") or [])
@@ -1001,24 +1243,30 @@ async def process_quality_3(message: Message, state: FSMContext) -> None:
             )
             return
         await _cleanup_quality_warnings_and_attempts(message.bot, message.chat.id, data)
-        await state.update_data(quality_3=message.text.strip(), invalid_user_message_ids=[], last_warning_message_id=None)
+        step_ids = list(data.get("quality_step_message_ids") or [])
+        targets = []
+        if last_msg_id:
+            targets.append(last_msg_id)
+        targets.extend(step_ids)
+        for mid in dict.fromkeys(targets):
+            try:
+                await message.bot.edit_message_reply_markup(
+                    chat_id=message.chat.id,
+                    message_id=mid,
+                    reply_markup=None,
+                )
+            except Exception:
+                pass
+        await state.update_data(
+            quality_3=message.text.strip(),
+            invalid_user_message_ids=[],
+            last_warning_message_id=None,
+            last_quality_error_message_id=None,
+        )
         text = t(lang, "quality_emoji_prompt")
         from keyboards.quality_emoji import get_quality_emoji_keyboard
         kb = get_quality_emoji_keyboard(3, prefix="reg", lang=lang)
-        try:
-            if last_msg_id:
-                await message.bot.edit_message_text(
-                    chat_id=message.chat.id,
-                    message_id=last_msg_id,
-                    text=text,
-                    reply_markup=kb,
-                )
-            else:
-                sent = await message.answer(text, reply_markup=kb)
-                await state.update_data(last_bot_message_id=sent.message_id)
-        except Exception:
-            sent = await message.answer(text, reply_markup=kb)
-            await state.update_data(last_bot_message_id=sent.message_id)
+        await message.answer(text, reply_markup=kb)
         await state.set_state(RegistrationStates.waiting_for_quality_3_emoji)
     except Exception as e:
         logger.error(f"Ошибка в process_quality_3: {e}", exc_info=True)
@@ -1045,72 +1293,72 @@ async def reg_quality_emoji_selected(callback: CallbackQuery, state: FSMContext)
         await state.update_data(**{f"quality_{step}_emoji": emoji})
         data = await state.get_data()
         lang = data.get("language", "ru")
-        last_msg_id = data.get("last_bot_message_id")
         msg = callback.message
         bot = callback.bot
+
+        # Защищаем все карточки «Сильная сторона ...» от автоудаления middleware
+        quality_step_ids = list(data.get("quality_step_message_ids") or [])
+        for mid in quality_step_ids:
+            try:
+                protect_message(msg.chat.id, int(mid))
+            except Exception:
+                pass
+
+        # Удаляем только сообщение с выбором смайлика
+        try:
+            await msg.delete()
+        except Exception:
+            pass
 
         if step == 1:
             text = t(lang, "quality_2_request") + t(lang, "reg_skip_hint")
             mid2 = await show_registration_step(
-                bot, msg.chat.id, last_msg_id, "quality_2",
+                bot, msg.chat.id, None, "quality_2",
                 text, get_skip_and_cancel_keyboard(lang), lang=lang,
             )
             if mid2 is not None:
-                await state.update_data(last_bot_message_id=mid2)
-            elif last_msg_id:
-                try:
-                    await bot.edit_message_text(
-                        chat_id=msg.chat.id, message_id=last_msg_id,
-                        text=text, reply_markup=get_skip_and_cancel_keyboard(lang),
-                    )
-                except Exception:
-                    sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
-                    await state.update_data(last_bot_message_id=sent.message_id)
+                quality_step_ids.append(mid2)
+                await state.update_data(last_bot_message_id=mid2, quality_step_message_ids=quality_step_ids)
+                protect_message(msg.chat.id, mid2)
             else:
                 sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
-                await state.update_data(last_bot_message_id=sent.message_id)
+                quality_step_ids.append(sent.message_id)
+                await state.update_data(last_bot_message_id=sent.message_id, quality_step_message_ids=quality_step_ids)
+                protect_message(msg.chat.id, sent.message_id)
             await state.set_state(RegistrationStates.waiting_for_quality_2)
         elif step == 2:
             text = t(lang, "quality_3_request") + t(lang, "reg_skip_hint")
             mid2 = await show_registration_step(
-                bot, msg.chat.id, last_msg_id, "quality_3",
+                bot, msg.chat.id, None, "quality_3",
                 text, get_skip_and_cancel_keyboard(lang), lang=lang,
             )
             if mid2 is not None:
-                await state.update_data(last_bot_message_id=mid2)
-            elif last_msg_id:
-                try:
-                    await bot.edit_message_text(
-                        chat_id=msg.chat.id, message_id=last_msg_id,
-                        text=text, reply_markup=get_skip_and_cancel_keyboard(lang),
-                    )
-                except Exception:
-                    sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
-                    await state.update_data(last_bot_message_id=sent.message_id)
+                quality_step_ids.append(mid2)
+                await state.update_data(last_bot_message_id=mid2, quality_step_message_ids=quality_step_ids)
+                protect_message(msg.chat.id, mid2)
             else:
                 sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
-                await state.update_data(last_bot_message_id=sent.message_id)
+                quality_step_ids.append(sent.message_id)
+                await state.update_data(last_bot_message_id=sent.message_id, quality_step_message_ids=quality_step_ids)
+                protect_message(msg.chat.id, sent.message_id)
             await state.set_state(RegistrationStates.waiting_for_quality_3)
         else:
             short_text = t(lang, "short_description_request") + t(lang, "reg_skip_hint")
             mid2 = await show_registration_step(
-                bot, msg.chat.id, last_msg_id, "short_desc",
+                bot, msg.chat.id, None, "short_desc",
                 short_text, get_skip_and_cancel_keyboard(lang), lang=lang,
             )
             if mid2 is not None:
-                await state.update_data(last_bot_message_id=mid2)
-            elif last_msg_id:
-                try:
-                    await bot.edit_message_text(
-                        chat_id=msg.chat.id, message_id=last_msg_id,
-                        text=short_text, reply_markup=get_skip_and_cancel_keyboard(lang),
-                    )
-                except Exception:
-                    sent = await msg.answer(short_text, reply_markup=get_skip_and_cancel_keyboard(lang))
-                    await state.update_data(last_bot_message_id=sent.message_id)
+                mids = list(data.get("description_step_message_ids") or [])
+                mids.append(mid2)
+                await state.update_data(last_bot_message_id=mid2, description_step_message_ids=mids)
+                protect_message(msg.chat.id, mid2)
             else:
                 sent = await msg.answer(short_text, reply_markup=get_skip_and_cancel_keyboard(lang))
-                await state.update_data(last_bot_message_id=sent.message_id)
+                mids = list(data.get("description_step_message_ids") or [])
+                mids.append(sent.message_id)
+                await state.update_data(last_bot_message_id=sent.message_id, description_step_message_ids=mids)
+                protect_message(msg.chat.id, sent.message_id)
             await state.set_state(RegistrationStates.waiting_for_short_description)
     except Exception as e:
         logger.error(f"Ошибка в reg_quality_emoji_selected: {e}", exc_info=True)

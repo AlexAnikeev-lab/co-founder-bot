@@ -1,3 +1,4 @@
 {
-  "likes_per_week_limit": 0
+  "likes_per_week_limit": 5,
+  "bookmarks_per_week_limit": 10
 }

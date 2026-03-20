@@ -1,8 +1,3 @@
-"""
-Co-founder Bot - Telegram бот для знакомств и поиска партнёров
-Главный файл запуска бота
-"""
-
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
@@ -28,21 +23,19 @@ async def main() -> None:
     # Загрузка конфигурации
     config = Config()
     
-    # Автоматическая инициализация БД при первом запуске (создаёт таблицы, если их нет)
+    #
     try:
         await init_database()
     except Exception as e:
         logger.error("Ошибка инициализации БД: %s", e, exc_info=True)
         raise
     
-    # Инициализация бота и диспетчера (BotDeletePrevious удаляет предыдущие сообщения при новой отправке)
     bot = BotDeletePrevious(
         token=config.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher()
     
-    # Регистрация middleware (DbSession — первым, чтобы одна сессия на запрос)
     dp.message.middleware(DbSessionMiddleware())
     dp.callback_query.middleware(DbSessionMiddleware())
     dp.message.middleware(DeletePreviousMiddleware())
@@ -62,7 +55,6 @@ async def main() -> None:
     else:
         logger.info("PAYMENT_GROUP_ID не задан — проверка кодов в группе отключена")
     try:
-        # Явно включаем message и edited_message, чтобы апдейты из группы оплаты не терялись
         allowed = list(dp.resolve_used_update_types())
         for ut in ("message", "edited_message"):
             if ut not in allowed:

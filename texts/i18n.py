@@ -10,8 +10,8 @@ SUPPORTED_LANGS = ("ru", "en")
 T = {
     "ru": {
         "language_question": "🌐 <b>Выбери язык / Choose your language</b>",
-        "welcome_1": "Добро пожаловать в Co-founder 👋\n\nЗдесь ты сможешь найти людей, с которыми хочется расти, думать и создавать что-то совершенно новое. Это место для тех, кто хочет развиваться и создавать, а не просто листать.",
-        "welcome_2": "Ты найдёшь себе партнёра не по случайности, а по ценностям, целям, стилю мышления, толерантности к риску и т.д.\n\nТы:\n✏️ пройдёшь тесты и лучше поймёшь себя\n📚 получишь доступ к обучающим материалам\n🤝 сможешь находить бизнес-партнёров и собирать команды для проекта, стартапа или любой общей идеи",
+        "welcome_1": "<b>Добро пожаловать в Co-founder 👋</b>\n\nЗдесь <b>ты сможешь найти людей, с которыми хочется расти, думать и создавать что-то совершенно новое</b>. Это место для тех, кто хочет развиваться и создавать, а не просто листать.",
+        "welcome_2": "🤩 <b>Здесь ты найдёшь себе бизнес-партнёра </b>не по случайности, а по ценностям, целям, стилю мышления, толерантности к риску и т.д.\n\nТы:\n✏️ <b>пройдёшь тесты</b> и лучше поймёшь себя\n📚 получишь доступ к обучающим материалам\n🤝 <b>сможешь находить бизнес-партнёров и собирать команды для проекта, стартапа или любой общей идеи</b>",
         "welcome_btn_gas": "Газ 🚀",
         "welcome_btn_cool": "Круто! 🤩",
         "birth_date_question": "✏️ <b>Укажи дату рождения</b>\n\n<i>Например: 31.07.2009 или 31 июля 2009</i>",
@@ -53,9 +53,9 @@ T = {
         "name_request": """✏️ <b>Как к тебе обращаться?</b>
 
 <i>Это имя будет отображаться у тебя в профиле.</i>""",
-        "name_request_profile": """👤 <b>Укажи своё имя</b>
+        "name_request_profile": """👤 <b>Укажи своё имя и фамилию</b>
 
-<i>Это имя будет отображаться в твоей анкете и поможет другим понять, как к тебе обращаться.</i>""",
+<i>Это имя и фамилия будут отображаться в твоей анкете и поможет другим понять, как к тебе обращаться.</i>""",
         "photo_request": """📸 <b>Добавь своё фото</b>
 
 <i>Фото будет отображаться в твоей анкете и поможет другим лучше узнать тебя.</i>""",
@@ -66,16 +66,16 @@ T = {
 
 Пример: "Разработчик с опытом в стартапах. Ищу со-основателя для EdTech проекта."
 
-Максимум 200 символов.""",
+Максимум 180 символов.""",
         "full_description_request": """📝 <b>Полное описание</b>
 
 <i>Расскажи подробнее о себе, своем опыте, интересах и целях.
 Что ты хочешь создать? Какие у тебя навыки?</i>
 
-Максимум 1000 символов.""",
-        "quality_1_request": "⭐ Введи своё <b>первое</b> качество (например: целеустремлённость).",
-        "quality_2_request": "⭐ Введи <b>второе</b> качество.",
-        "quality_3_request": "⭐ Введи <b>третье</b> качество.",
+Максимум 500 символов.""",
+        "quality_1_request": "⭐️ <b>Введи своё первое сильное качество или навык</b>\n\nЭто может быть:\n— <b>личное качество</b> (например: целеустремлённость)\n— <b>навык</b> (например: умею коммуницировать, разбираюсь в SMM)\n— <b>или опыт/результат</b> (например: работал в недвижимости, сделал прибыль $1M+).",
+        "quality_2_request": "⭐️ <b>Введи своё второе сильное качество или навык</b>\n\nЭто может быть:\n— <b>личное качество</b> (например: целеустремлённость)\n— <b>навык</b> (например: умею коммуницировать, разбираюсь в SMM)\n— <b>или опыт/результат</b> (например: работал в недвижимости, сделал прибыль $1M+).",
+        "quality_3_request": "⭐️ <b>Введи своё третье сильное качество или навык</b>\n\nЭто может быть:\n— <b>личное качество</b> (например: целеустремлённость)\n— <b>навык</b> (например: умею коммуницировать, разбираюсь в SMM)\n— <b>или опыт/результат</b> (например: работал в недвижимости, сделал прибыль $1M+).",
         "reg_skip_hint": "\n\nМожно нажать «Пропустить» и заполнить позже в разделе «Партнёры».",
         "success_registration": "✅ Регистрация завершена! Добро пожаловать!",
         "success_registration_offer_test": (
@@ -84,8 +84,8 @@ T = {
         ),
         "contact_request_hint": "📱 Нажми кнопку ниже, чтобы отправить контакт",
         "contact_please_send": "Пожалуйста, отправь контакт кнопкой ниже.",
-        "registration_cancelled": "❌ Регистрация отменена.",
-        "accept_and_continue": "Принимаю и продолжаю ✅",
+        "registration_cancelled": "Чтобы заполнить анкету заново, напиши /start",
+        "accept_and_continue": "Принимаю ✅",
         "change_language": "🌐 Сменить язык",
         "edit_profile": "✏️ Изменить",
         "delete_profile": "🗑 Удалить профиль",
@@ -188,12 +188,12 @@ T = {
         "matches_list_title": "Люди, с которыми у вас взаимный интерес:",
         "matches_btn_dm": "💬 {name} — в ЛС",
         "edit_name_title": "✏️ <b>Изменение имени</b>\n\nВведи новое имя:",
-        "edit_name_error": "❌ Имя: от 2 до 50 символов, только буквы.",
+        "edit_name_error": "❌ Имя: от 2 до 40 символов, только буквы.",
         "edit_photo_title": "📸 <b>Изменение фото</b>",
         "edit_photo_request": "Отправь новое фото:",
-        "edit_short_desc_error": "❌ Краткое описание: от 10 до 200 символов.",
-        "edit_full_desc_error": "❌ Полное описание: от 20 до 1000 символов.",
-        "edit_quality_error": "❌ Укажи качество от 2 до 50 символов.",
+        "edit_short_desc_error": "❌ Краткое описание: от 10 до 180 символов.",
+        "edit_full_desc_error": "❌ Полное описание: от 20 до 500 символов.",
+        "edit_quality_error": "❌ Укажи качество от 2 до 40 символов.",
         "edit_quality_emoji_error": "Ошибка. Попробуйте снова.",
         "like_notification_text": "🤝 <b>Кто-то проявил интерес</b>\n\n{swiper_name} отметил(а) вашу анкету.\n\nНажмите «Посмотреть», чтобы открыть анкету и ответить.",
         "like_notification_btn_view": "👀 Посмотреть",
@@ -292,30 +292,30 @@ T = {
         "premium_title": "⭐ <b>Co-founder Subscription</b>",
         "premium_text": "Расширенные возможности в разработке.",
         # Подписка: экран предложения
-        "subscription_benefits_title": "⭐ <b>Co-founder Subscription</b>\n\nТы получаешь:\n\n🔥 <b>1 супер-лайк</b> — контакт партнёра сразу, без ожидания взаимного лайка\n❤️ <b>1 лайк в неделю</b> — отмечай понравившиеся анкеты\n⭐ <b>5 избранных</b> — сохраняй до 5 анкет в избранное\n\nСтоимость: <b>{price} звёзд</b> (Telegram Stars).\n\nЕсли звёзд нет — купить можно по <a href=\"{url}\">ссылке</a>.",
+        "subscription_benefits_title": "⭐ <b>Co-founder Subscription</b>\n\nТы получаешь:\n\n🔥 <b>1 супер-лайк</b> — контакт партнёра сразу, без ожидания взаимного лайка\n❤️ <b>10 лайков в неделю</b> — отмечай понравившиеся анкеты\n⭐ <b>20 избранных</b> — до 20 избранных мест (всего)\n\nСтоимость: <b>{price} звёзд в месяц</b> — <b>всё х2</b> (Telegram Stars).\n\nЕсли звёзд нет — купить можно по <a href=\"{url}\">ссылке</a>.",
         "subscription_btn_pay": "💳 Оплатить",
         "subscription_btn_show_code": "📋 Показать код",
         "subscription_btn_i_paid": "✅ Я оплатил",
         "subscription_btn_back_profile": "◀️ Вернуться в профиль",
         "subscription_how_to_title": "📋 <b>Как оплатить</b>\n\nДля максимально быстрой оплаты:\n\n1️⃣ Нажми «Показать код» — тебе придёт твой персональный код.\n2️⃣ Отправь этот код одним сообщением в нашу группу оплаты.\n3️⃣ Бот проверит сообщение и моментально удалит его.\n4️⃣ Подписка активируется — тебе придёт поздравление.\n5️⃣ Нажми «Я оплатил» после отправки кода в группу.",
         "subscription_code_screen": "📋 <b>Твой код для оплаты</b>\n\nОтправь этот код <b>одним сообщением</b> в группу:\n\n<a href=\"{group_url}\">Перейти в группу оплаты</a>\n\nКод (скопируй):\n<code>{code}</code>\n\nПосле отправки кода в группу нажми «Я оплатил».",
-        "subscription_congrats": "🎉 <b>Поздравляем с покупкой подписки!</b>\n\nТебе доступны: супер-лайк 🔥, 1 лайк в неделю и 5 избранных.",
+        "subscription_congrats": "🎉 <b>Поздравляем с покупкой подписки!</b>\n\nТебе доступны: супер-лайк 🔥, 10 лайков в неделю и 20 избранных.",
         "subscription_not_yet": "⏳ Подписка ещё не активирована.\n\nОтправь свой код в группу оплаты и нажми «Я оплатил» снова.",
         "subscription_already": "✅ У тебя уже есть активная подписка.\n\nЖми «Вернуться в профиль» — и пользуйся супер-лайком в разделе Партнёры.",
         "subscription_back_to_profile": "Вернуться в профиль",
-        "subscription_admin_give": "🎉 <b>Тебе выдали подписку на месяц!</b>\n\nСпасибо за вклад в проект. Теперь тебе доступны: супер-лайк 🔥, 1 лайк в неделю и 5 избранных.",
+        "subscription_admin_give": "🎉 <b>Тебе выдали подписку на месяц!</b>\n\nСпасибо за вклад в проект. Теперь тебе доступны: супер-лайк 🔥, 10 лайков в неделю и 20 избранных.",
         "limit_likes_week": "⛔ Не более {limit} лайков в неделю. Лимит исчерпан. Попробуйте через несколько дней.",
         "likes_left_info": "❤️ У тебя осталось <b>{remaining}</b> из <b>{limit}</b> лайков на эту неделю.",
         "likes_no_left_info": "⛔ Ты использовал все <b>{limit}</b> лайков на эту неделю.",
         "likes_unlimited_info": "❤️ У тебя нет ограничений по лайкам на эту неделю.",
-        "limit_bookmarks_week": "⛔ Не более 5 добавлений в избранное в неделю. Лимит исчерпан. Попробуйте через несколько дней.",
-        "limit_favorites_total": "⛔ В избранном может быть не более 5 анкет. Удалите кого-то из избранного или оформите подписку.",
+        "limit_bookmarks_week": "⛔ Не более {limit} добавлений в избранное в неделю. Лимит исчерпан. Попробуйте через несколько дней.",
+        "limit_favorites_total": "⛔ В избранном может быть не более {limit} анкет. Удалите кого-то из избранного или оформите подписку.",
         "card_super_like_btn": "🔥",
     },
     "en": {
         "language_question": "🌐 <b>Choose your language</b>",
-        "welcome_1": "Welcome to Co-founder 👋\n\nHere you can find people you want to grow, think and build something new with. This is a place for those who want to develop and create, not just scroll.",
-        "welcome_2": "You'll find a partner not by chance, but by values, goals, way of thinking, risk tolerance, etc.\n\nYou will:\n✏️ take tests and understand yourself better\n📚 get access to learning materials\n🤝 find business partners and build teams for a project, startup or any shared idea",
+        "welcome_1": "<b>Welcome to Co-founder 👋</b>\n\nHere you can find people you want to grow, think and build <b>something new with.</b> This is a place for those who want to develop and create, not just scroll.",
+        "welcome_2": "You'll find a partner not by chance, but by values, goals, way of thinking, risk tolerance, etc.\n\nYou will:\n✏️ take tests and understand yourself better\n📚 get access to learning materials\n🤝 find <b>business partners and build teams for a project, startup or any shared idea</b>",
         "welcome_btn_gas": "Go 🚀",
         "welcome_btn_cool": "Cool! 🤩",
         "birth_date_question": "✏️ <b>Enter your date of birth</b>\n\n<i>E.g.: 31.07.2009 or July 31, 2009</i>",
@@ -335,7 +335,7 @@ T = {
 
 ⚠️ <b>Important:</b>
 
-Test results and compatibility scores are <b>for information only.</b> They are <b>not personal advice</b> and do not guarantee success of a project, partnership or team. You make your own decisions.
+Test results and compatibility scores are <b>for information use only.</b> They are <b>not personal advice</b> and do not guarantee success of a project, partnership or team. You make your own decisions.
 
 <b>By continuing, you confirm that you:</b>
 — have read the terms
@@ -357,9 +357,9 @@ They're needed for the bot to work correctly and for us to stay in touch.""",
         "name_request": """✏️ <b>What should we call you?</b>
 
 <i>This name will be shown in your profile.</i>""",
-        "name_request_profile": """👤 <b>Enter your name</b>
+        "name_request_profile": """👤 <b>Enter your name and surname</b>
 
-<i>This name will appear in your profile and help others know what to call you.</i>""",
+<i>This name and surname will appear in your profile and help others know what to call you.</i>""",
         "photo_request": """📸 <b>Add your photo</b>
 
 <i>It will be shown in your profile and help others get to know you.</i>""",
@@ -370,16 +370,16 @@ This will be visible in the partners list.</i>
 
 Example: "Developer with startup experience. Looking for a co-founder for an EdTech project."
 
-Max 200 characters.""",
+Max 180 characters.""",
         "full_description_request": """📝 <b>Full description</b>
 
 <i>Tell more about yourself, your experience, interests and goals.
 What do you want to build? What are your skills?</i>
 
-Max 1000 characters.""",
-        "quality_1_request": "⭐ Enter your <b>first</b> strength (e.g. determination).",
-        "quality_2_request": "⭐ Enter your <b>second</b> strength.",
-        "quality_3_request": "⭐ Enter your <b>third</b> strength.",
+Max 500 characters.""",
+        "quality_1_request": "⭐️ <b>Enter your first strong quality or skill</b>\n\nThis could be:\n— <b>a personal quality</b> (e.g.: determination)\n— <b>a skill</b> (e.g.: I can communicate well, I’m familiar with SMM)\n— <b>or experience/results</b> (e.g.: worked in real estate, made profit $1M+).",
+        "quality_2_request": "⭐️ <b>Enter your second strong quality or skill</b>\n\nThis could be:\n— <b>a personal quality</b> (e.g.: determination)\n— <b>a skill</b> (e.g.: I can communicate well, I’m familiar with SMM)\n— <b>or experience/results</b> (e.g.: worked in real estate, made profit $1M+).",
+        "quality_3_request": "⭐️ <b>Enter your third strong quality or skill</b>\n\nThis could be:\n— <b>a personal quality</b> (e.g.: determination)\n— <b>a skill</b> (e.g.: I can communicate well, I’m familiar with SMM)\n— <b>or experience/results</b> (e.g.: worked in real estate, made profit $1M+).",
         "reg_skip_hint": "\n\nYou can tap «Skip» and fill this in later in Partners.",
         "success_registration": "✅ Registration complete! Welcome!",
         "success_registration_offer_test": (
@@ -388,7 +388,7 @@ Max 1000 characters.""",
         ),
         "contact_request_hint": "📱 Tap the button below to share your contact",
         "contact_please_send": "Please send your contact using the button below.",
-        "registration_cancelled": "❌ Registration cancelled.",
+        "registration_cancelled": "To fill in the form again, type /start",
         "accept_and_continue": "I accept and continue ✅",
         "change_language": "🌐 Change language",
         "edit_profile": "✏️ Edit",
@@ -421,7 +421,7 @@ Max 1000 characters.""",
         "likes_left_info": "❤️ You have <b>{remaining}</b> out of <b>{limit}</b> likes left for this week.",
         "likes_no_left_info": "⛔ You have used all <b>{limit}</b> likes for this week.",
         "likes_unlimited_info": "❤️ You have no like limit for this week.",
-        "limit_bookmarks_week": "⛔ Up to 5 additions to favorites per week. Limit reached. Try again in a few days.",
+        "limit_bookmarks_week": "⛔ Up to {limit} additions to favorites per week. Limit reached. Try again in a few days.",
         "quality_emoji_prompt": "Choose an emoji for this strength:",
         "quality_no_emoji_in_text": "❌ Don't use emoji in the text. You can pick an emoji next.",
         "card_no_name": "No name",
@@ -486,21 +486,21 @@ Max 1000 characters.""",
         "lang_english": "English",
         "edit_current_copyable": "Current (can copy):",
         "people_search_coming_soon": "Feature coming soon.",
-        "favorites_empty_text": "Here will be people you added to favorites (🏷 button in Partners).",
+        "favorites_empty_text": "Here will be people you added to favorites (🌟 button in Partners).",
         "favorites_load_error": "Failed to load profile.",
         "favorites_load_list_error": "Failed to load list. Try again later.",
-        "favorites_empty_all": "No one left in favorites. Add profiles with 🏷 in Partners.",
+        "favorites_empty_all": "No one left in favorites. Add profiles with 🌟 in Partners.",
         "matches_empty_text": "Here will be people with mutual interest.",
         "matches_empty_hint": "No matches yet. Like profiles in Partners — when someone likes back, you'll both appear here.",
         "matches_list_title": "People with mutual interest:",
         "matches_btn_dm": "💬 {name} — DM",
         "edit_name_title": "✏️ <b>Edit name</b>\n\nEnter new name:",
-        "edit_name_error": "❌ Name: 2–50 characters, letters only.",
+        "edit_name_error": "❌ Name: 2–40 characters, letters only.",
         "edit_photo_title": "📸 <b>Edit photo</b>",
         "edit_photo_request": "Send new photo:",
-        "edit_short_desc_error": "❌ Short description: 10–200 characters.",
-        "edit_full_desc_error": "❌ Full description: 20–1000 characters.",
-        "edit_quality_error": "❌ Enter 2–50 characters.",
+        "edit_short_desc_error": "❌ Short description: 10–180 characters.",
+        "edit_full_desc_error": "❌ Full description: 20–500 characters.",
+        "edit_quality_error": "❌ Enter 2–40 characters.",
         "edit_quality_emoji_error": "Error. Try again.",
         "like_notification_text": "🤝 <b>Someone showed interest</b>\n\n{swiper_name} liked your profile.\n\nTap «View» to open the profile and respond.",
         "like_notification_btn_view": "👀 View",
@@ -593,18 +593,19 @@ A good business idea usually grows from a <b>problem</b> you see around you.
         "instruction_text": "1. Fill in your profile\n2. Take tests to understand yourself better\n3. Explore the learning materials\n4. Find partners in the People section\n5. Connect and build projects together!",
         "premium_title": "⭐ <b>Co-founder Subscription</b>",
         "premium_text": "More features coming soon.",
-        "subscription_benefits_title": "⭐ <b>Co-founder Subscription</b>\n\nYou get:\n\n🔥 <b>1 super like</b> — see partner's contact right away, no mutual like needed\n❤️ <b>1 like per week</b> — mark profiles you like\n⭐ <b>5 favorites</b> — save up to 5 profiles in favorites\n\nPrice: <b>{price} stars</b> (Telegram Stars).\n\nIf you don't have stars — you can buy them via this <a href=\"{url}\">link</a>.",
+        "subscription_benefits_title": "⭐ <b>Co-founder Subscription</b>\n\nYou get:\n\n🔥 <b>1 super like</b> — see partner's contact right away, no mutual like needed\n❤️ <b>10 likes per week</b> — mark profiles you like\n⭐ <b>20 favorites</b> — up to 20 favorite places (total)\n\nPrice: <b>{price} stars in a month</b> — <b>everything x2</b> (Telegram Stars).\n\nIf you don't have stars — you can buy them via this <a href=\"{url}\">link</a>.",
         "subscription_btn_pay": "💳 Pay",
         "subscription_btn_show_code": "📋 Show code",
         "subscription_btn_i_paid": "✅ I paid",
         "subscription_btn_back_profile": "◀️ Back to profile",
         "subscription_how_to_title": "📋 <b>How to pay</b>\n\nFor the fastest payment:\n\n1️⃣ Tap «Show code» — you'll get your personal code.\n2️⃣ Send this code in one message to our payment group.\n3️⃣ The bot will check and delete the message.\n4️⃣ Subscription activates — you'll get a congrats message.\n5️⃣ Tap «I paid» after sending the code.",
         "subscription_code_screen": "📋 <b>Your payment code</b>\n\nSend this code in <b>one message</b> to the group:\n\n<a href=\"{group_url}\">Go to payment group</a>\n\nCode (copy):\n<code>{code}</code>\n\nAfter sending the code, tap «I paid».",
-        "subscription_congrats": "🎉 <b>Congratulations on your subscription!</b>\n\nYou now have: super like 🔥, 1 like per week, and 5 favorites.",
+        "subscription_congrats": "🎉 <b>Congratulations on your subscription!</b>\n\nYou now have: super like 🔥, 10 likes per week, and 20 favorites.",
         "subscription_not_yet": "⏳ Subscription not activated yet.\n\nSend your code to the payment group and tap «I paid» again.",
         "subscription_already": "✅ You already have an active subscription.\n\nTap «Back to profile» and use the super like in Partners.",
         "subscription_back_to_profile": "Back to profile",
-        "limit_favorites_total": "⛔ You can have at most 5 favorites. Remove someone or get a subscription.",
+        "subscription_admin_give": "🎉 <b>You have been granted a subscription for a month!</b>\n\nThanks for your contribution to the project. Now you have: super like 🔥, 10 likes per week, and 20 favorites.",
+        "limit_favorites_total": "⛔ You can have at most {limit} favorites. Remove someone or get a subscription.",
         "card_super_like_btn": "🔥",
     },
 }

@@ -91,7 +91,7 @@ def validate_name(name: str) -> bool:
     """Валидация имени"""
     if not name or len(name.strip()) < 2:
         return False
-    if len(name) > 50:
+    if len(name) > 40:
         return False
     # Проверка на допустимые символы (буквы, пробелы, дефисы)
     if not re.match(r'^[a-zA-Zа-яА-ЯёЁ\s\-]+$', name):
@@ -115,7 +115,7 @@ def validate_short_description(text: str) -> bool:
     """Валидация краткого описания"""
     if not text or len(text.strip()) < 10:
         return False
-    if len(text) > 200:
+    if len(text) > 180:
         return False
     return True
 
@@ -124,7 +124,7 @@ def validate_full_description(text: str) -> bool:
     """Валидация полного описания"""
     if not text or len(text.strip()) < 20:
         return False
-    if len(text) > 1000:
+    if len(text) > 500:
         return False
     return True
 
@@ -138,7 +138,7 @@ def validate_qualities(text: str) -> bool:
         return False
     # Проверяем, что каждое качество не пустое и не слишком длинное
     for quality in qualities:
-        if len(quality) < 2 or len(quality) > 50:
+        if len(quality) < 2 or len(quality) > 40:
             return False
     return True
 
@@ -163,8 +163,8 @@ def text_contains_emoji(text: str) -> bool:
 
 
 def validate_single_quality(text: str) -> bool:
-    """Валидация одного качества (2–50 символов)"""
+    """Валидация одного качества (2–40 символов)"""
     if not text or not text.strip():
         return False
     t = text.strip()
-    return 2 <= len(t) <= 50
+    return 2 <= len(t) <= 40

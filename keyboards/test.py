@@ -20,6 +20,18 @@ def get_post_registration_offer_keyboard(lang: str = "ru") -> InlineKeyboardMark
     return builder.as_markup()
 
 
+def get_post_registration_minor_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
+    """Клавиатура после регистрации для несовершеннолетних (язык: ru/en)."""
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(
+        text=t(lang, "profile_tests"),
+        callback_data="tests",
+    ))
+    builder.add(get_main_menu_button(lang))
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def get_test_list_keyboard(main_test_completed: bool = False, lang: str = "ru") -> InlineKeyboardMarkup:
     """Список доступных тестов (язык ru/en). Основной тест скрыт, если уже пройден."""
     builder = InlineKeyboardBuilder()

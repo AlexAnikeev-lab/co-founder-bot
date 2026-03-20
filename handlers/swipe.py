@@ -15,7 +15,7 @@ from repositories.user_repository import User, UserRepository
 from repositories.test_repository import TestResult, TestResultRepository
 from repositories.swipe_repository import SwipeRepository
 from services.compatibility_service import CompatibilityService
-from services.settings import get_likes_per_week_limit
+from services.settings import get_bookmarks_per_week_limit, get_likes_per_week_limit
 from middlewares.delete_previous import protect_message
 from keyboards.swipe import (
     get_swipe_keyboard,
@@ -102,7 +102,7 @@ class _FilterNotInPartners(BaseFilter):
 def _clean_full_description(raw: Optional[str]) -> str:
     """
     Возвращает описание для показа. Если в тексте сохранена подсказка регистрации
-    («Максимум 1000 символов», «Расскажи подробнее о себе»), считаем описание пустым.
+    («Максимум 500 символов», «Расскажи подробнее о себе»), считаем описание пустым.
     """
     if not raw or not raw.strip():
         return ""
@@ -112,6 +112,7 @@ def _clean_full_description(raw: Optional[str]) -> str:
         return ""
     # Удаляем только вставленные фразы подсказки, оставляя остальной текст
     for phrase in (
+        "Максимум 500 символов.",
         "Максимум 1000 символов.",
         "Расскажи подробнее о себе, своем опыте, интересах и целях.",
         "Что ты хочешь создать? Какие у тебя навыки?",
@@ -206,6 +207,7 @@ def format_user_profile(
 
 # Максимум кандидатов для расчёта совместимости (устраняет N+1 и тяжёлые запросы при 400+ пользователях)
 SWIPE_CANDIDATES_LIMIT = 80
+PREMIUM_LIMIT_MULTIPLIER = 2  # "всё х2" для подписчиков
 
 
 async def get_next_user_for_swipe(
@@ -237,12 +239,14 @@ async def _get_likes_left_text(
     session: AsyncSession,
     user_id: int,
     lang: str,
+    is_premium: bool = False,
 ) -> str:
     """
     Текст про оставшиеся лайки на неделю для пользователя.
     Учитывает глобальный лимит и количество лайков за последние 7 дней.
     """
-    limit = get_likes_per_week_limit()
+    base_limit = get_likes_per_week_limit()
+    limit = base_limit * (PREMIUM_LIMIT_MULTIPLIER if is_premium else 1)
     if limit <= 0:
         return t(lang, "likes_unlimited_info")
     count_likes = await SwipeRepository.count_in_last_7_days(session, user_id, "like")
@@ -562,7 +566,7 @@ async def cmd_dating(
     has_super_like = getattr(user, "subscription_active", False) and not getattr(user, "super_like_used", False)
     await state.update_data(in_partners=True)
 
-    likes_text = await _get_likes_left_text(session, user_id, lang)
+    likes_text = await _get_likes_left_text(session, user_id, lang, is_premium=bool(getattr(user, "subscription_active", False)))
     await message.answer(
         f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_intro')}\n\n{likes_text}",
         reply_markup=get_partners_reply_keyboard(lang, has_super_like=has_super_like),
@@ -589,7 +593,7 @@ async def handle_partners_reply_action(
     message: Message, state: FSMContext, session: AsyncSession
 ) -> None:
     """
-    Обработка нажатий [🤝] [🏷] [👎] в разделе Партнеры.
+    Обработка нажатий [🤝] [🌟] [👎] в разделе Партнеры.
     Действие применяется к текущей анкете (current_partner_id из state), затем показывается следующая.
     """
     try:
@@ -608,23 +612,28 @@ async def handle_partners_reply_action(
     try:
         current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
         lang = getattr(current_user, "language", None) or "ru" if current_user else "ru"
+        is_premium = bool(getattr(current_user, "subscription_active", False))
         if action == "super_like":
             if not current_user or not getattr(current_user, "subscription_active", False) or getattr(current_user, "super_like_used", False):
-                await message.answer(t(lang, "limit_likes_week"))
+                base_limit = get_likes_per_week_limit()
+                limit = base_limit * (PREMIUM_LIMIT_MULTIPLIER if is_premium else 1)
+                await message.answer(t(lang, "limit_likes_week", limit=limit))
                 if current_user:
                     await show_next_profile(session, message, swiper_user_id, current_user, state=state, in_partners=True)
                 return
         if action == "like":
-            limit = get_likes_per_week_limit()
+            limit = get_likes_per_week_limit() * (PREMIUM_LIMIT_MULTIPLIER if is_premium else 1)
             count_likes = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "like")
             if limit > 0 and count_likes >= limit:
                 await message.answer(t(lang, "limit_likes_week", limit=limit))
                 await show_next_profile(session, message, swiper_user_id, current_user, state=state, in_partners=True)
                 return
         elif action == "bookmark":
-            count_bookmarks = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "bookmark")
-            if count_bookmarks >= 5:
-                await message.answer(t(lang, "limit_bookmarks_week"))
+            favorites_limit = get_bookmarks_per_week_limit() * (PREMIUM_LIMIT_MULTIPLIER if is_premium else 1)
+            favorites_ids = await SwipeRepository.get_bookmarked_user_ids(session, swiper_user_id)
+            already_bookmarked = swiped_user_id in favorites_ids
+            if favorites_limit > 0 and (not already_bookmarked) and len(favorites_ids) >= favorites_limit:
+                await message.answer(t(lang, "limit_favorites_total", limit=favorites_limit))
                 await show_next_profile(session, message, swiper_user_id, current_user, state=state, in_partners=True)
                 return
 
@@ -705,7 +714,7 @@ async def handle_partners_reply_action(
 
         # Показать информацию об оставшихся лайках после успешного лайка
         if action == "like":
-            likes_text = await _get_likes_left_text(session, swiper_user_id, lang)
+            likes_text = await _get_likes_left_text(session, swiper_user_id, lang, is_premium=is_premium)
             await message.answer(likes_text)
 
         current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
@@ -892,10 +901,12 @@ async def handle_swipe_from_notification(callback: CallbackQuery) -> None:
     """
     await callback.answer()
     lang = "ru"
+    is_premium = False
     async for _s in get_session():
         u = await UserRepository.get_by_telegram_id(_s, callback.from_user.id)
         if u:
             lang = getattr(u, "language", None) or "ru"
+            is_premium = bool(getattr(u, "subscription_active", False))
         break
     try:
         parts = callback.data.split(":")
@@ -907,15 +918,17 @@ async def handle_swipe_from_notification(callback: CallbackQuery) -> None:
 
         async for session in get_session():
             if action == "like":
-                limit = get_likes_per_week_limit()
+                limit = get_likes_per_week_limit() * (PREMIUM_LIMIT_MULTIPLIER if is_premium else 1)
                 count_likes = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "like")
                 if limit > 0 and count_likes >= limit:
                     await callback.answer(t(lang, "limit_likes_week", limit=limit), show_alert=True)
                     return
             elif action == "bookmark":
-                count_bookmarks = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "bookmark")
-                if count_bookmarks >= 5:
-                    await callback.answer(t(lang, "limit_bookmarks_week"), show_alert=True)
+                favorites_limit = get_bookmarks_per_week_limit() * (PREMIUM_LIMIT_MULTIPLIER if is_premium else 1)
+                favorites_ids = await SwipeRepository.get_bookmarked_user_ids(session, swiper_user_id)
+                already_bookmarked = swiped_user_id in favorites_ids
+                if favorites_limit > 0 and (not already_bookmarked) and len(favorites_ids) >= favorites_limit:
+                    await callback.answer(t(lang, "limit_favorites_total", limit=favorites_limit), show_alert=True)
                     return
             await SwipeRepository.create_swipe(
                 session, swiper_user_id, swiped_user_id, action
@@ -978,7 +991,7 @@ async def handle_swipe_from_notification(callback: CallbackQuery) -> None:
                         t(lang, "like_sent_message"),
                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[get_back_button("main_menu", lang)]]),
                     )
-                    likes_text = await _get_likes_left_text(session, swiper_user_id, lang)
+                    likes_text = await _get_likes_left_text(session, swiper_user_id, lang, is_premium=is_premium)
                     await callback.message.answer(likes_text)
             else:
                 await callback.message.answer(
@@ -1105,20 +1118,25 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
         async for session in get_session():
             current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
             lang = getattr(current_user, "language", None) or "ru" if current_user else "ru"
+            is_premium = bool(getattr(current_user, "subscription_active", False))
             if action == "super_like":
                 if not current_user or not getattr(current_user, "subscription_active", False) or getattr(current_user, "super_like_used", False):
-                    await callback.answer(t(lang, "limit_likes_week"), show_alert=True)
+                    base_limit = get_likes_per_week_limit()
+                    limit = base_limit * (PREMIUM_LIMIT_MULTIPLIER if is_premium else 1)
+                    await callback.answer(t(lang, "limit_likes_week", limit=limit), show_alert=True)
                     return
             if action == "like":
-                limit = get_likes_per_week_limit()
+                limit = get_likes_per_week_limit() * (PREMIUM_LIMIT_MULTIPLIER if is_premium else 1)
                 count_likes = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "like")
                 if limit > 0 and count_likes >= limit:
                     await callback.answer(t(lang, "limit_likes_week", limit=limit), show_alert=True)
                     return
             elif action == "bookmark":
-                count_bookmarks = await SwipeRepository.count_in_last_7_days(session, swiper_user_id, "bookmark")
-                if count_bookmarks >= 5:
-                    await callback.answer(t(lang, "limit_bookmarks_week"), show_alert=True)
+                favorites_limit = get_bookmarks_per_week_limit() * (PREMIUM_LIMIT_MULTIPLIER if is_premium else 1)
+                favorites_ids = await SwipeRepository.get_bookmarked_user_ids(session, swiper_user_id)
+                already_bookmarked = swiped_user_id in favorites_ids
+                if favorites_limit > 0 and (not already_bookmarked) and len(favorites_ids) >= favorites_limit:
+                    await callback.answer(t(lang, "limit_favorites_total", limit=favorites_limit), show_alert=True)
                     return
 
             await callback.answer()
@@ -1252,7 +1270,7 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
                     break
                 # Не мэтч — показываем следующую анкету как обычно
             if action == "like":
-                likes_text = await _get_likes_left_text(session, swiper_user_id, lang)
+                likes_text = await _get_likes_left_text(session, swiper_user_id, lang, is_premium=is_premium)
                 await callback.message.answer(likes_text)
             if action in ("like", "dislike") and in_favorites:
                 await _show_next_favorite_or_empty(callback, state, lang, send_new_message=False)

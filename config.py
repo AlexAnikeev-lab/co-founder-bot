@@ -154,7 +154,7 @@ class Config:
     OPENROUTER_SITE_NAME: Optional[str] = os.getenv("OPENROUTER_SITE_NAME", "Co-founder Bot")
 
     # Подписка: оплата через группу (код в сообщении)
-    SUBSCRIPTION_STARS_PRICE: int = int(os.getenv("SUBSCRIPTION_STARS_PRICE", "55"))
+    SUBSCRIPTION_STARS_PRICE: int = int(os.getenv("SUBSCRIPTION_STARS_PRICE", "100"))
     PAYMENT_GROUP_ID: Optional[int] = None  # ID группы, куда пользователь пишет код (из .env)
     PAYMENT_CODE_BASE: str = os.getenv("PAYMENT_CODE_BASE", "S4K3FF")
     BUY_STARS_BOT_URL: str = os.getenv("BUY_STARS_BOT_URL", "https://t.me/BotFather")  # гиперссылка «ссылка» для покупки звёзд

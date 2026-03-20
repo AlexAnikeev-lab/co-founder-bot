@@ -11,9 +11,9 @@ from aiogram.types import (
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 
-# Тексты кнопок для reply-клавиатуры в разделе Партнеры (🤝 🏷 👎)
+# Тексты кнопок для reply-клавиатуры в разделе Партнеры (🤝 🌟 👎)
 PARTNERS_BTN_LIKE = "🤝"
-PARTNERS_BTN_BOOKMARK = "🏷"
+PARTNERS_BTN_BOOKMARK = "🌟"
 PARTNERS_BTN_DISLIKE = "👎"
 
 
@@ -79,7 +79,7 @@ def get_swipe_keyboard(
         builder.add(InlineKeyboardButton(text=t(lang, "card_super_like_btn"), callback_data=f"swipe_super_like:{swiped_user_id}"))
     builder.add(
         InlineKeyboardButton(text="🤝", callback_data=f"swipe_like:{swiped_user_id}"),
-        InlineKeyboardButton(text="🏷", callback_data=f"swipe_bookmark:{swiped_user_id}"),
+        InlineKeyboardButton(text="🌟", callback_data=f"swipe_bookmark:{swiped_user_id}"),
         InlineKeyboardButton(text="👎", callback_data=f"swipe_dislike:{swiped_user_id}"),
     )
     builder.adjust(3 if not has_super_like else 2, 2 if has_super_like else 1)
@@ -104,7 +104,7 @@ def get_swipe_keyboard_from_notification(
     builder = InlineKeyboardBuilder()
     builder.add(
         InlineKeyboardButton(text="🤝", callback_data=f"swipe_notif_like:{swiped_user_id}"),
-        InlineKeyboardButton(text="🏷", callback_data=f"swipe_notif_bookmark:{swiped_user_id}"),
+        InlineKeyboardButton(text="🌟", callback_data=f"swipe_notif_bookmark:{swiped_user_id}"),
         InlineKeyboardButton(text="👎", callback_data=f"swipe_notif_dislike:{swiped_user_id}"),
     )
     builder.adjust(3)

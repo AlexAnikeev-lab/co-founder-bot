@@ -26,9 +26,21 @@ THROTTLE_SKIP_PREFIXES = (
 )
 
 
-def _should_skip_throttle(event: TelegramObject) -> bool:
+async def _should_skip_throttle(event: TelegramObject, data: Dict[str, Any]) -> bool:
     if isinstance(event, CallbackQuery) and event.data:
-        return any(event.data.startswith(prefix) for prefix in THROTTLE_SKIP_PREFIXES)
+        if any(event.data.startswith(prefix) for prefix in THROTTLE_SKIP_PREFIXES):
+            return True
+    # Для шагов регистрации не применяем throttling к сообщениям,
+    # чтобы ввод не "проглатывался" при быстром ответе пользователя.
+    if isinstance(event, Message):
+        state = data.get("state")
+        if state:
+            try:
+                current = await state.get_state()
+            except Exception:
+                current = None
+            if current and "RegistrationStates" in current:
+                return True
     return False
 
 
@@ -52,7 +64,7 @@ class ThrottlingMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any],
     ) -> Any:
-        if _should_skip_throttle(event):
+        if await _should_skip_throttle(event, data):
             return await handler(event, data)
 
         user_id = None

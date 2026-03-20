@@ -21,6 +21,17 @@ class AuthMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any],
     ) -> Any:
+        # Ускоряем регистрацию: на шаги RegistrationStates не тратим лишние запросы в БД.
+        # Последнюю активность всё равно не критично обновлять во время заполнения анкеты.
+        state = data.get("state")
+        if state:
+            try:
+                current = await state.get_state()
+            except Exception:
+                current = None
+            if current and "RegistrationStates" in current:
+                return await handler(event, data)
+
         session = data.get("session")
         if not session:
             return await handler(event, data)
