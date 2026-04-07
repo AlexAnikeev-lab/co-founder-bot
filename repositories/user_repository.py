@@ -47,6 +47,17 @@ class UserRepository:
             select(User).where(User.telegram_id == telegram_id)
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_by_telegram_ids(session: AsyncSession, telegram_ids: list[int]) -> dict[int, User]:
+        """Пакетная загрузка пользователей по telegram_id. Возвращает {telegram_id: User}."""
+        if not telegram_ids:
+            return {}
+        result = await session.execute(
+            select(User).where(User.telegram_id.in_(telegram_ids))
+        )
+        users = result.scalars().all()
+        return {u.telegram_id: u for u in users}
     
     @staticmethod
     async def create(session: AsyncSession, telegram_id: int, username: Optional[str] = None) -> User:

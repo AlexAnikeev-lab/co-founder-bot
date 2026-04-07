@@ -11,6 +11,7 @@ from repositories.test_repository import TestResult
 from repositories.swipe_repository import Swipe
 from repositories.admin_archive_repository import AdminUserArchive
 from repositories.subscription_repository import SubscriptionPendingCode
+from repositories.events_repository import Event, EventRegistration, EventMatchNotification
 
 logger = logging.getLogger(__name__)
 

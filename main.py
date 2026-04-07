@@ -12,6 +12,7 @@ from middlewares.throttling import ThrottlingMiddleware
 from middlewares.delete_previous import BotDeletePrevious, DeletePreviousMiddleware
 from handlers import register_all_handlers
 from utils.logger import setup_logging
+from services.events_scheduler import events_scheduler_loop
 
 
 async def main() -> None:
@@ -47,6 +48,9 @@ async def main() -> None:
     
     # Регистрация всех handlers
     register_all_handlers(dp)
+
+    # Планировщик мероприятий (мэтчинг за 24 часа до старта)
+    asyncio.create_task(events_scheduler_loop(bot, poll_seconds=60))
     
     # Запуск бота
     logger.info("Бот запущен")

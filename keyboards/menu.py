@@ -16,7 +16,7 @@ from texts.i18n import t
 def get_main_menu_keyboard(is_minor: bool = False, lang: str = "ru") -> ReplyKeyboardMarkup:
     """Главное меню: первый ряд 📚 🤝 👤, второй ряд ⭐️ Co-founder Subscription (язык: ru/en)."""
     builder = ReplyKeyboardBuilder()
-    builder.add(KeyboardButton(text=t(lang, "menu_learning")))
+    builder.add(KeyboardButton(text=t(lang, "menu_events")))
     if not is_minor:
         builder.add(KeyboardButton(text=t(lang, "menu_partners")))
     builder.add(KeyboardButton(text=t(lang, "menu_profile")))

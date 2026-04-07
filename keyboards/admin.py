@@ -79,6 +79,12 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
     )
     builder.add(
         InlineKeyboardButton(
+            text="📅 Мероприятия",
+            callback_data=AdminCallbackData(action="events").pack(),
+        )
+    )
+    builder.add(
+        InlineKeyboardButton(
             text="⚙️ Лимиты",
             callback_data=AdminCallbackData(action="limits").pack(),
         )

@@ -4,6 +4,7 @@
 
 import re
 from datetime import date
+from datetime import datetime
 from typing import Optional
 
 # Названия месяцев по-русски (родительный падеж) для парсинга даты
@@ -168,3 +169,24 @@ def validate_single_quality(text: str) -> bool:
         return False
     t = text.strip()
     return 2 <= len(t) <= 40
+
+
+def parse_event_datetime(text: str) -> Optional[datetime]:
+    """
+    Парсит дату и время мероприятия.
+    Формат: ДД.ММ.ГГГГ ЧЧ:ММ (например: 07.04.2026 18:30)
+    """
+    if not text or not text.strip():
+        return None
+    s = text.strip()
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s+(\d{1,2}):(\d{2})$", s)
+    if not m:
+        return None
+    day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if year < 100:
+        year = _normalize_year(year)
+    hour, minute = int(m.group(4)), int(m.group(5))
+    try:
+        return datetime(year, month, day, hour, minute)
+    except ValueError:
+        return None

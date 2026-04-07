@@ -92,7 +92,7 @@ T = {
         "language_updated": "✅ Язык изменён.",
         # Главное меню и навигация
         "main_menu_title": "🏠 <b>Главное меню</b>",
-        "menu_learning": "📚",
+        "menu_events": "📅 Мероприятия",
         "menu_partners": "🤝",
         "menu_info": "ℹ️ Информация",
         "menu_profile": "👤",
@@ -311,6 +311,15 @@ T = {
         "limit_bookmarks_week": "⛔ Не более {limit} добавлений в избранное в неделю. Лимит исчерпан. Попробуйте через несколько дней.",
         "limit_favorites_total": "⛔ В избранном может быть не более {limit} анкет. Удалите кого-то из избранного или оформите подписку.",
         "card_super_like_btn": "🔥",
+
+        # Мероприятия
+        "events_title": "📅 <b>Мероприятия</b>",
+        "events_empty": "Пока нет доступных мероприятий.",
+        "events_btn_join": "Участвовать",
+        "events_btn_prev": "Назад",
+        "events_btn_next": "Вперед",
+        "events_join_ok": "✅ Вы зарегистрированы на мероприятие.",
+        "events_join_already": "ℹ️ Вы уже зарегистрированы на это мероприятие.",
     },
     "en": {
         "language_question": "🌐 <b>Choose your language</b>",
@@ -395,7 +404,7 @@ Max 500 characters.""",
         "delete_profile": "🗑 Delete profile",
         "language_updated": "✅ Language changed.",
         "main_menu_title": "🏠 <b>Main menu</b>",
-        "menu_learning": "📚",
+        "menu_events": "📅 Events",
         "menu_partners": "🤝",
         "menu_info": "ℹ️ Information",
         "menu_profile": "👤",
@@ -607,6 +616,15 @@ A good business idea usually grows from a <b>problem</b> you see around you.
         "subscription_admin_give": "🎉 <b>You have been granted a subscription for a month!</b>\n\nThanks for your contribution to the project. Now you have: super like 🔥, 10 likes per week, and 20 favorites.",
         "limit_favorites_total": "⛔ You can have at most {limit} favorites. Remove someone or get a subscription.",
         "card_super_like_btn": "🔥",
+
+        # Events
+        "events_title": "📅 <b>Events</b>",
+        "events_empty": "No events available yet.",
+        "events_btn_join": "Join",
+        "events_btn_prev": "Back",
+        "events_btn_next": "Next",
+        "events_join_ok": "✅ You're registered for the event.",
+        "events_join_already": "ℹ️ You're already registered for this event.",
     },
 }
 
