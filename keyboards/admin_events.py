@@ -12,7 +12,7 @@ from keyboards.admin import AdminCallbackData
 
 
 class AdminEventsCallbackData(CallbackData, prefix="adm_ev"):
-    action: str  # open, add, edit, delete, toggle_match, participants, back
+    action: str  # open, add, edit, delete, toggle_match, participants, remind_pairs, back
     event_id: int
 
 
@@ -58,6 +58,12 @@ def get_admin_event_view_keyboard(event_id: int, matching_enabled: bool) -> Inli
         InlineKeyboardButton(
             text="👥 Зарегистрировавшиеся",
             callback_data=AdminEventsCallbackData(action="participants", event_id=event_id).pack(),
+        )
+    )
+    b.add(
+        InlineKeyboardButton(
+            text="📣 Напомнить о паре",
+            callback_data=AdminEventsCallbackData(action="remind_pairs", event_id=event_id).pack(),
         )
     )
     b.add(

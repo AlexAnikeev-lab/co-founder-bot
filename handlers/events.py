@@ -178,7 +178,8 @@ async def events_join(callback: CallbackQuery, callback_data: EventsCallbackData
     try:
         lang, _ = await _get_lang_and_minor(session, callback.from_user.id)
         ok = await EventsRepository.register_user(session, callback_data.event_id, callback.from_user.id)
-        await callback.answer(t(lang, "events_join_ok") if ok else t(lang, "events_join_already"), show_alert=True)
+        await callback.answer()
+        await callback.message.answer(t(lang, "events_join_ok") if ok else t(lang, "events_join_already"))
     except Exception as e:
         logger.error("Ошибка регистрации на мероприятие: %s", e, exc_info=True)
         await handle_error(None, e, "events_join")

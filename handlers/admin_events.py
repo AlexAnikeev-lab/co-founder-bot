@@ -23,6 +23,7 @@ from keyboards.admin_events import (
 )
 from repositories.events_repository import EventsRepository
 from repositories.user_repository import UserRepository
+from services.events_matching import notify_pairs_for_event
 from states.events_admin import AdminEventsStates
 from utils.validators import parse_event_datetime
 from utils.errors import handle_error
@@ -263,6 +264,30 @@ async def admin_events_participants(callback: CallbackQuery, callback_data: Admi
         reply_markup=get_admin_event_view_keyboard(ev.id, bool(ev.matching_enabled)),
         parse_mode="HTML",
     )
+
+
+@router.callback_query(AdminEventsCallbackData.filter(F.action == "remind_pairs"))
+async def admin_events_remind_pairs(callback: CallbackQuery, callback_data: AdminEventsCallbackData, state: FSMContext, session: AsyncSession) -> None:
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    await callback.answer("Отправляю…")
+    ev = await EventsRepository.get_by_id(session, callback_data.event_id)
+    if not ev:
+        await callback.message.answer("❌ Мероприятие не найдено.")
+        return
+    try:
+        sent = await notify_pairs_for_event(callback.bot, session, ev)
+        if sent > 0:
+            await callback.message.answer(f"✅ Напоминания о паре отправлены: {sent} пользователям.")
+        else:
+            await callback.message.answer("ℹ️ Нет подходящих пар для отправки (или уведомления уже отправлены).")
+    except Exception as e:
+        logger.error("Ошибка ручной отправки напоминаний о паре: %s", e, exc_info=True)
+        await handle_error(None, e, "admin_events_remind_pairs")
+        await callback.message.answer("❌ Не удалось отправить напоминания.")
 
 
 @router.callback_query(AdminEventsCallbackData.filter(F.action == "edit"))
