@@ -10,7 +10,12 @@ from aiogram.types import CallbackQuery, Message, InputMediaPhoto
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from keyboards.events import EventsCallbackData, EventsNavCallbackData, get_event_card_keyboard
+from keyboards.events import (
+    EventsCallbackData,
+    EventsNavCallbackData,
+    get_event_card_keyboard,
+    get_events_list_keyboard,
+)
 from keyboards.menu import get_main_menu_keyboard
 from repositories.user_repository import UserRepository
 from repositories.events_repository import EventsRepository, Event
@@ -38,6 +43,66 @@ async def _get_lang_and_minor(session: AsyncSession, user_id: int) -> tuple[str,
         lang = getattr(u, "language", None) or "ru"
         is_minor = bool(getattr(u, "is_minor", False))
     return lang, is_minor
+
+
+async def _show_events_list(
+    *,
+    message_or_callback: Message | CallbackQuery,
+    state: FSMContext,
+    session: AsyncSession,
+    user_id: int,
+) -> None:
+    lang, is_minor = await _get_lang_and_minor(session, user_id)
+    items = await EventsRepository.list_items(session)
+    if not items:
+        text = t(lang, "events_title") + "\n\n" + t(lang, "events_empty")
+        if isinstance(message_or_callback, CallbackQuery):
+            msg = message_or_callback.message
+            if not msg:
+                return
+            try:
+                await msg.edit_text(text, reply_markup=None, parse_mode="HTML")
+            except Exception:
+                await msg.answer(text, reply_markup=None, parse_mode="HTML")
+        else:
+            await message_or_callback.answer(
+                text,
+                reply_markup=get_main_menu_keyboard(is_minor=is_minor, lang=lang),
+                parse_mode="HTML",
+            )
+        return
+
+    text = t(lang, "events_title") + "\n\n" + t(lang, "choose_event_from_list")
+    kb_items: list[tuple[int, str]] = []
+    for it in items:
+        btn_text = f"{it.position}. {it.title} • {it.starts_at.strftime('%d.%m %H:%M')}"
+        kb_items.append((it.id, btn_text))
+    kb = get_events_list_keyboard(lang=lang, items=kb_items)
+
+    if isinstance(message_or_callback, CallbackQuery):
+        cb = message_or_callback
+        msg = cb.message
+        if not msg:
+            return
+        try:
+            # Если до этого была карточка с фото — проще переслать новым сообщением
+            if msg.photo:
+                await msg.delete()
+                sent = await msg.answer(text, reply_markup=kb, parse_mode="HTML")
+                await state.update_data(last_bot_message_id=sent.message_id)
+            else:
+                await msg.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        except Exception:
+            try:
+                await msg.delete()
+            except Exception:
+                pass
+            sent = await msg.answer(text, reply_markup=kb, parse_mode="HTML")
+            await state.update_data(last_bot_message_id=sent.message_id)
+    else:
+        m = message_or_callback
+        sent = await m.answer(text, reply_markup=kb, parse_mode="HTML")
+        await state.update_data(last_bot_message_id=sent.message_id)
 
 
 async def _show_event_by_position(
@@ -135,16 +200,68 @@ async def events_from_menu(message: Message, state: FSMContext, session: AsyncSe
             await message.delete()
         except Exception:
             pass
-        await _show_event_by_position(
+        await _show_events_list(
             message_or_callback=message,
             state=state,
             session=session,
             user_id=message.from_user.id,
-            position=1,
         )
     except Exception as e:
         logger.error("Ошибка открытия мероприятий: %s", e, exc_info=True)
         await handle_error(None, e, "events_from_menu")
+
+
+@router.callback_query(F.data == "events_list")
+async def events_back_to_list(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    if not callback.from_user:
+        return
+    await callback.answer()
+    try:
+        await _show_events_list(
+            message_or_callback=callback,
+            state=state,
+            session=session,
+            user_id=callback.from_user.id,
+        )
+    except Exception as e:
+        logger.error("Ошибка возврата к списку мероприятий: %s", e, exc_info=True)
+        await handle_error(None, e, "events_back_to_list")
+        await callback.answer(t("ru", "error_try_later"), show_alert=True)
+
+
+@router.callback_query(EventsCallbackData.filter(F.action == "open"))
+async def events_open(callback: CallbackQuery, callback_data: EventsCallbackData, state: FSMContext, session: AsyncSession) -> None:
+    if not callback.from_user:
+        return
+    await callback.answer()
+    try:
+        ev = await EventsRepository.get_by_id(session, int(callback_data.event_id))
+        if not ev:
+            lang, _ = await _get_lang_and_minor(session, callback.from_user.id)
+            if callback.message:
+                try:
+                    await callback.message.edit_text(
+                        "❌ " + t(lang, "events_not_found"),
+                        reply_markup=None,
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    await callback.message.answer(
+                        "❌ " + t(lang, "events_not_found"),
+                        parse_mode="HTML",
+                    )
+            return
+        await _show_event_by_position(
+            message_or_callback=callback,
+            state=state,
+            session=session,
+            user_id=callback.from_user.id,
+            position=int(ev.position),
+        )
+    except Exception as e:
+        logger.error("Ошибка открытия карточки мероприятия: %s", e, exc_info=True)
+        await handle_error(None, e, "events_open")
+        await callback.answer(t("ru", "error_try_later"), show_alert=True)
 
 
 @router.callback_query(EventsNavCallbackData.filter())

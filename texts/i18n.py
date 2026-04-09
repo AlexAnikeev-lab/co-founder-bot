@@ -315,6 +315,8 @@ T = {
         # Мероприятия
         "events_title": "📅 <b>Мероприятия</b>",
         "events_empty": "Пока нет доступных мероприятий.",
+        "choose_event_from_list": "Выберите мероприятие из списка ниже:",
+        "events_not_found": "Мероприятие не найдено.",
         "events_btn_join": "Участвовать",
         "events_btn_prev": "Назад",
         "events_btn_next": "Вперед",
@@ -620,6 +622,8 @@ A good business idea usually grows from a <b>problem</b> you see around you.
         # Events
         "events_title": "📅 <b>Events</b>",
         "events_empty": "No events available yet.",
+        "choose_event_from_list": "Choose an event from the list below:",
+        "events_not_found": "Event not found.",
         "events_btn_join": "Join",
         "events_btn_prev": "Back",
         "events_btn_next": "Next",

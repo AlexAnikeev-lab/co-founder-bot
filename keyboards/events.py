@@ -22,6 +22,26 @@ class EventsNavCallbackData(CallbackData, prefix="evn"):
     position: int
 
 
+def get_events_list_keyboard(*, lang: str, items: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+    """
+    Список мероприятий: каждая кнопка открывает карточку.
+
+    items: [(event_id, button_text), ...]
+    """
+    builder = InlineKeyboardBuilder()
+    for event_id, button_text in items:
+        builder.add(
+            InlineKeyboardButton(
+                text=button_text,
+                callback_data=EventsCallbackData(action="open", event_id=event_id).pack(),
+            )
+        )
+
+    builder.add(get_back_button("main_menu", lang))
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def get_event_card_keyboard(
     *,
     lang: str,
@@ -40,25 +60,7 @@ def get_event_card_keyboard(
         )
     )
 
-    nav_row: list[InlineKeyboardButton] = []
-    if show_prev:
-        nav_row.append(
-            InlineKeyboardButton(
-                text="⬅️ " + t(lang, "events_btn_prev"),
-                callback_data=EventsNavCallbackData(action="prev", position=position).pack(),
-            )
-        )
-    if show_next:
-        nav_row.append(
-            InlineKeyboardButton(
-                text=t(lang, "events_btn_next") + " ➡️",
-                callback_data=EventsNavCallbackData(action="next", position=position).pack(),
-            )
-        )
-    if nav_row:
-        builder.row(*nav_row)
-
-    builder.add(get_back_button("main_menu", lang))
+    builder.add(get_back_button("events_list", lang))
     builder.adjust(1)
     return builder.as_markup()
 
