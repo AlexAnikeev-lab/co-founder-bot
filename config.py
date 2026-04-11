@@ -134,7 +134,7 @@ class Config:
     """Класс конфигурации бота"""
     
     # Версия бота
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.0.1"
     
     # Токен бота
     BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")

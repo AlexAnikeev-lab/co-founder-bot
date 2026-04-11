@@ -52,15 +52,22 @@ def _dm_link(user: User) -> str:
     return f"tg://user?id={user.telegram_id}"
 
 
-async def build_pairs_for_event(session: AsyncSession, event: Event) -> list[PairMatch]:
+async def build_pairs_for_event(
+    session: AsyncSession,
+    event: Event,
+    *,
+    only_unnotified: bool = True,
+) -> list[PairMatch]:
     user_ids = await EventsRepository.list_registered_user_ids(session, event.id)
     if len(user_ids) < 2:
         return []
 
-    # Берём только тех, кому ещё не слали уведомление по этому мероприятию
     eligible: list[int] = []
     for uid in user_ids:
-        if not await EventsRepository.was_notified(session, event.id, uid):
+        if only_unnotified:
+            if not await EventsRepository.was_notified(session, event.id, uid):
+                eligible.append(uid)
+        else:
             eligible.append(uid)
     if len(eligible) < 2:
         return []
@@ -137,8 +144,8 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
         try:
             profile_text_b = format_user_profile(b, compatibility=None, expanded=True, lang=getattr(a, "language", None) or "ru")
             text_a = (
-                "У нас есть мэтч!\n"
-                "Мы подобрали тебе идеальную компанию для завтрашнего мероприятия:\n\n"
+                "Мы подобрали тебе пару для мероприятия!\n"
+                f"Ваша совместимость: <b>{p.score}%</b>. Удачно пообщаться!\n\n"
                 f"{profile_text_b}\n\n"
                 f"Ссылка на профиль: {_dm_link(b)}"
             )
@@ -152,8 +159,8 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
         try:
             profile_text_a = format_user_profile(a, compatibility=None, expanded=True, lang=getattr(b, "language", None) or "ru")
             text_b = (
-                "У нас есть мэтч!\n"
-                "Мы подобрали тебе идеальную компанию для завтрашнего мероприятия:\n\n"
+                "Мы подобрали тебе пару для мероприятия!\n"
+                f"Ваша совместимость: <b>{p.score}%</b>. Удачно пообщаться!\n\n"
                 f"{profile_text_a}\n\n"
                 f"Ссылка на профиль: {_dm_link(a)}"
             )

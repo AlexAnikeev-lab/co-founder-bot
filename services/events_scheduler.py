@@ -1,6 +1,8 @@
 """
-Планировщик: раз в N секунд проверяет мероприятия, которые начинаются ровно через 24 часа,
-и рассылает мэтчи зарегистрированным участникам (если включён тумблер мэтчинга).
+Планировщик мероприятий (раз в N секунд):
+
+1. Удаление карточек, у которых прошёл указанный календарный день (starts_at = конец этого дня).
+2. Рассылка мэтчей за ~24 часа до конца этого дня (если включён подбор пар).
 """
 
 from __future__ import annotations
@@ -30,6 +32,13 @@ async def events_scheduler_loop(bot: Bot, *, poll_seconds: int = 60) -> None:
             start_from = now + timedelta(hours=24)
             start_to = start_from + timedelta(seconds=poll_seconds)
             async for session in get_session():
+                try:
+                    removed = await EventsRepository.delete_expired_events(session, before=now)
+                    if removed:
+                        logger.info("Удалено просроченных мероприятий: %s", removed)
+                except Exception as e:
+                    logger.exception("Ошибка удаления просроченных мероприятий: %s", e)
+
                 events = await EventsRepository.get_events_starting_in_window(
                     session,
                     start_from=start_from,

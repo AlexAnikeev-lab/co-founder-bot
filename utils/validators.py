@@ -190,3 +190,24 @@ def parse_event_datetime(text: str) -> Optional[datetime]:
         return datetime(year, month, day, hour, minute)
     except ValueError:
         return None
+
+
+def parse_event_end_date(text: str) -> Optional[datetime]:
+    """
+    Календарная дата мероприятия (день, после которого карточка удаляется).
+    Формат: ДД.ММ.ГГГГ (например: 07.04.2026).
+    Возвращает конец этого дня 23:59:59 (naive, как остальной код с датами).
+    """
+    if not text or not text.strip():
+        return None
+    s = text.strip()
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$", s)
+    if not m:
+        return None
+    day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if year < 100:
+        year = _normalize_year(year)
+    try:
+        return datetime(year, month, day, 23, 59, 59)
+    except ValueError:
+        return None

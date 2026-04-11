@@ -12,14 +12,20 @@ from keyboards.admin import AdminCallbackData
 
 
 class AdminEventsCallbackData(CallbackData, prefix="adm_ev"):
-    action: str  # open, add, edit, delete, toggle_match, participants, remind_pairs, back
+    action: str  # open, add, edit, delete, toggle_match, participants, remind_pairs, broadcast, pairs_list, ...
     event_id: int
+
+
+class AdminEventCreateMatchCallbackData(CallbackData, prefix="aecm"):
+    """Выбор «подбор пар» при создании мероприятия."""
+
+    choice: str  # y | n
 
 
 class AdminEventsEditCallbackData(CallbackData, prefix="adm_eve"):
     action: str  # field
     event_id: int
-    field: str  # banner,title,description,price,datetime
+    field: str  # title, description, event_date
 
 
 def get_admin_events_list_keyboard(events: list[tuple[int, str]],) -> InlineKeyboardMarkup:
@@ -62,7 +68,19 @@ def get_admin_event_view_keyboard(event_id: int, matching_enabled: bool) -> Inli
     )
     b.add(
         InlineKeyboardButton(
-            text="📣 Напомнить о паре",
+            text="👀 Пары (список)",
+            callback_data=AdminEventsCallbackData(action="pairs_list", event_id=event_id).pack(),
+        )
+    )
+    b.add(
+        InlineKeyboardButton(
+            text="✉️ Написать участникам",
+            callback_data=AdminEventsCallbackData(action="broadcast", event_id=event_id).pack(),
+        )
+    )
+    b.add(
+        InlineKeyboardButton(
+            text="💌 Уведомить о парах",
             callback_data=AdminEventsCallbackData(action="remind_pairs", event_id=event_id).pack(),
         )
     )
@@ -88,14 +106,29 @@ def get_admin_event_view_keyboard(event_id: int, matching_enabled: bool) -> Inli
     return b.as_markup()
 
 
+def get_admin_event_create_match_keyboard() -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.row(
+        InlineKeyboardButton(
+            text="✅ Да, подбирать пары",
+            callback_data=AdminEventCreateMatchCallbackData(choice="y").pack(),
+        )
+    )
+    b.row(
+        InlineKeyboardButton(
+            text="❌ Нет",
+            callback_data=AdminEventCreateMatchCallbackData(choice="n").pack(),
+        )
+    )
+    return b.as_markup()
+
+
 def get_admin_event_edit_fields_keyboard(event_id: int) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     for field, label in (
-        ("banner", "🖼 Баннер"),
-        ("title", "🏷 Название"),
-        ("description", "📝 Описание"),
-        ("price", "💰 Цена"),
-        ("datetime", "🗓 Дата/время"),
+        ("title", "🔘 Текст кнопки"),
+        ("description", "📝 Описание (сообщение)"),
+        ("event_date", "🗓 Дата (конец дня → удаление)"),
     ):
         b.add(
             InlineKeyboardButton(

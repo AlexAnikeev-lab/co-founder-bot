@@ -35,6 +35,10 @@ class Event(Base):
 
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    """Плоский текст (для старых карточек и превью в админке)."""
+    detail_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    """JSON с текстом/медиа и entities (цитаты, кастомные эмодзи и т.д.)."""
+
     price: Mapped[str] = mapped_column(String(64), nullable=False, default="0")
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
 
@@ -142,9 +146,10 @@ class EventsRepository:
         *,
         title: str,
         description: str,
+        detail_json: str | None,
         price: str,
         starts_at: datetime,
-        banner_file_id: str | None,
+        banner_file_id: str | None = None,
         matching_enabled: bool = False,
     ) -> Event:
         # позиция = в конец списка
@@ -154,6 +159,7 @@ class EventsRepository:
             position=max_pos + 1,
             title=title,
             description=description,
+            detail_json=detail_json,
             price=price,
             starts_at=starts_at,
             banner_file_id=banner_file_id,
@@ -171,6 +177,7 @@ class EventsRepository:
         *,
         title: Optional[str] = None,
         description: Optional[str] = None,
+        detail_json: Optional[str] = None,
         price: Optional[str] = None,
         starts_at: Optional[datetime] = None,
         banner_file_id: Optional[str] = None,
@@ -181,6 +188,8 @@ class EventsRepository:
             values["title"] = title
         if description is not None:
             values["description"] = description
+        if detail_json is not None:
+            values["detail_json"] = detail_json
         if price is not None:
             values["price"] = price
         if starts_at is not None:
@@ -193,6 +202,22 @@ class EventsRepository:
             return
         await session.execute(update(Event).where(Event.id == event_id).values(**values))
         await session.commit()
+
+    @staticmethod
+    async def delete_expired_events(session: AsyncSession, *, before: datetime) -> int:
+        """
+        Удаляет мероприятия, у которых starts_at < before (хранится конец календарного дня).
+        Удаляет с конца списка позиций, чтобы пересчёт position в delete_event был корректным.
+        """
+        res = await session.execute(
+            select(Event).where(Event.starts_at < before).order_by(Event.position.desc())
+        )
+        rows: list[Event] = list(res.scalars().all())
+        n = 0
+        for ev in rows:
+            await EventsRepository.delete_event(session, ev.id)
+            n += 1
+        return n
 
     @staticmethod
     async def delete_event(session: AsyncSession, event_id: int) -> None:

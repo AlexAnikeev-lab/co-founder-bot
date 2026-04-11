@@ -13,13 +13,8 @@ from texts.i18n import t
 
 
 class EventsCallbackData(CallbackData, prefix="ev"):
-    action: str  # open, nav, join
+    action: str  # open, join
     event_id: int
-
-
-class EventsNavCallbackData(CallbackData, prefix="evn"):
-    action: str  # prev, next
-    position: int
 
 
 def get_events_list_keyboard(*, lang: str, items: list[tuple[int, str]]) -> InlineKeyboardMarkup:
@@ -46,10 +41,6 @@ def get_event_card_keyboard(
     *,
     lang: str,
     event_id: int,
-    position: int,
-    total: int,
-    show_prev: bool,
-    show_next: bool,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
@@ -63,4 +54,3 @@ def get_event_card_keyboard(
     builder.add(get_back_button("events_list", lang))
     builder.adjust(1)
     return builder.as_markup()
-

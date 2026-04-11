@@ -39,7 +39,10 @@ async def _should_skip_throttle(event: TelegramObject, data: Dict[str, Any]) -> 
                 current = await state.get_state()
             except Exception:
                 current = None
-            if current and "RegistrationStates" in current:
+            if current and (
+                "RegistrationStates" in current
+                or "AdminEventsStates" in current
+            ):
                 return True
     return False
 
