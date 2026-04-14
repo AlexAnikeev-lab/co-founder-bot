@@ -277,6 +277,17 @@ class EventsRepository:
         )
         return int(res.scalar() or 0)
 
+    @staticmethod
+    async def list_registered_event_ids_for_user(session: AsyncSession, user_telegram_id: int) -> set[int]:
+        """
+        Возвращает set event_id, где пользователь уже зарегистрирован.
+        Используется для маркировки кнопок списка мероприятий.
+        """
+        res = await session.execute(
+            select(EventRegistration.event_id).where(EventRegistration.user_telegram_id == user_telegram_id)
+        )
+        return {int(x) for x in res.scalars().all()}
+
     # -------- Notifications --------
     @staticmethod
     async def mark_notified(
@@ -303,6 +314,18 @@ class EventsRepository:
             )
         )
         return res.scalar_one_or_none() is not None
+
+    @staticmethod
+    async def list_notified_event_ids_for_user(session: AsyncSession, user_telegram_id: int) -> set[int]:
+        """
+        Возвращает set event_id, где пользователю уже отправлено уведомление о паре.
+        """
+        res = await session.execute(
+            select(EventMatchNotification.event_id).where(
+                EventMatchNotification.user_telegram_id == user_telegram_id
+            )
+        )
+        return {int(x) for x in res.scalars().all()}
 
     @staticmethod
     async def get_events_starting_in_window(

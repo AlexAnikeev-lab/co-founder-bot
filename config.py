@@ -102,6 +102,8 @@ def _load_photo_file_ids_en() -> dict[str, str]:
 
 REGISTRATION_PHOTO_FILE_IDS = _load_photo_file_ids()
 REGISTRATION_PHOTO_FILE_IDS_EN = _load_photo_file_ids_en()
+EVENTS_LIST_PHOTO_FILE_ID_RU = REGISTRATION_PHOTO_FILE_IDS.get("events")
+EVENTS_LIST_PHOTO_FILE_ID_EN = REGISTRATION_PHOTO_FILE_IDS_EN.get("events") or REGISTRATION_PHOTO_FILE_IDS.get("events_en")
 
 
 def get_registration_photo_file_id(step: str, lang: str = "ru") -> Optional[str]:
@@ -109,6 +111,29 @@ def get_registration_photo_file_id(step: str, lang: str = "ru") -> Optional[str]
     if lang == "en":
         return REGISTRATION_PHOTO_FILE_IDS_EN.get(step) or REGISTRATION_PHOTO_FILE_IDS.get(step)
     return REGISTRATION_PHOTO_FILE_IDS.get(step)
+
+
+def get_events_list_photo_file_id(lang: str = "ru") -> Optional[str]:
+    """
+    file_id обложки для экрана «Мероприятия».
+    Для ru: REGISTRATION_PHOTO_FILE_IDS["events"].
+    Для en: REGISTRATION_PHOTO_FILE_IDS_EN["events"] (или fallback на ru).
+    """
+    if lang == "en":
+        return EVENTS_LIST_PHOTO_FILE_ID_EN or EVENTS_LIST_PHOTO_FILE_ID_RU
+    return EVENTS_LIST_PHOTO_FILE_ID_RU
+
+
+def get_events_list_photo_path(lang: str = "ru") -> Optional[Path]:
+    """
+    Локальный fallback-файл обложки экрана «Мероприятия».
+    """
+    if lang == "en":
+        path = PROJECT_ROOT / "photos_engls" / "IMG_7209.PNG"
+        if path.exists():
+            return path
+    path = PROJECT_ROOT / "photos" / "events.png"
+    return path if path.exists() else None
 
 
 def _load_dotenv_safe() -> None:

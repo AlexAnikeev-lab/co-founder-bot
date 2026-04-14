@@ -7,10 +7,12 @@ from __future__ import annotations
 import logging
 
 from aiogram import Router, F
+from aiogram.types import FSInputFile
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import get_events_list_photo_file_id, get_events_list_photo_path
 from keyboards.events import (
     EventsCallbackData,
     get_event_card_keyboard,
@@ -80,11 +82,39 @@ async def _show_events_list(
         return
 
     text = t(lang, "events_title") + "\n\n" + t(lang, "choose_event_from_list")
+    reg_event_ids = await EventsRepository.list_registered_event_ids_for_user(session, user_id)
+    notified_event_ids = await EventsRepository.list_notified_event_ids_for_user(session, user_id)
     kb_items: list[tuple[int, str]] = []
     for it in items:
-        btn_text = (it.title or "")[:64]
+        title = (it.title or "").strip()[:56]
+        markers: list[str] = []
+        if it.id in reg_event_ids:
+            markers.append("✅")
+        if it.id in notified_event_ids:
+            markers.append("🔔")
+        markers_text = (" " + " ".join(markers)) if markers else ""
+        btn_text = (title + markers_text)[:64]
         kb_items.append((it.id, btn_text))
     kb = get_events_list_keyboard(lang=lang, items=kb_items)
+    cover_file_id = get_events_list_photo_file_id(lang=lang)
+    cover_path = get_events_list_photo_path(lang=lang)
+
+    async def _send_list_message(msg: Message) -> Message:
+        if cover_file_id:
+            return await msg.answer_photo(
+                photo=cover_file_id,
+                caption=text,
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+        if cover_path:
+            return await msg.answer_photo(
+                photo=FSInputFile(cover_path),
+                caption=text,
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+        return await msg.answer(text, reply_markup=kb, parse_mode="HTML")
 
     if isinstance(message_or_callback, CallbackQuery):
         cb = message_or_callback
@@ -92,22 +122,14 @@ async def _show_events_list(
         if not msg:
             return
         try:
-            if msg.photo:
-                await msg.delete()
-                sent = await msg.answer(text, reply_markup=kb, parse_mode="HTML")
-                await state.update_data(last_bot_message_id=sent.message_id)
-            else:
-                await msg.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            await msg.delete()
         except Exception:
-            try:
-                await msg.delete()
-            except Exception:
-                pass
-            sent = await msg.answer(text, reply_markup=kb, parse_mode="HTML")
-            await state.update_data(last_bot_message_id=sent.message_id)
+            pass
+        sent = await _send_list_message(msg)
+        await state.update_data(last_bot_message_id=sent.message_id)
     else:
         m = message_or_callback
-        sent = await m.answer(text, reply_markup=kb, parse_mode="HTML")
+        sent = await _send_list_message(m)
         await state.update_data(last_bot_message_id=sent.message_id)
 
 
