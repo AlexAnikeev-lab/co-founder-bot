@@ -126,6 +126,11 @@ def get_test_answer_keyboard(
                 callback_data=f"test_answer:{test_type}:{question_num}:{key}"
             ))
     
+    if question_num > 1:
+        builder.add(InlineKeyboardButton(
+            text=t(lang, "test_prev_question_btn"),
+            callback_data=f"prev_question:{test_type}:{question_num - 1}"
+        ))
     builder.add(get_back_button("tests", lang))
     builder.adjust(1)
     return builder.as_markup()

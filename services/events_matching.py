@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import logging
-import html
 from dataclasses import dataclass
 from typing import Optional
 
@@ -121,10 +120,8 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
     """
     Возвращает количество пользователей, которым отправлено уведомление (по 2 на пару).
     """
-    from handlers.swipe import (
-        format_user_profile,  # локально, чтобы не создавать циклические импорты при старте
-        _clean_full_description,
-    )
+    from handlers.swipe import format_user_profile  # локально, чтобы не создавать циклические импорты при старте
+    from keyboards.events import get_event_pair_profile_keyboard
     from texts.i18n import t
 
     pairs = await build_pairs_for_event(session, event)
@@ -149,10 +146,9 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
         try:
             lang_a = getattr(a, "language", None) or "ru"
             intro_a = (
-                "Привет! 🎉\n"
-                "Мы нашли тебе пару на мероприятие.\n"
-                f"Ваша совместимость: <b>{p.score}%</b>. Удачно пообщаться!\n\n"
-                f"Ссылка на профиль: {_dm_link(b)}"
+                f"{t(lang_a, 'events_pair_boom_title')}\n\n"
+                f"{t(lang_a, 'events_pair_boom_text')}\n"
+                f"{t(lang_a, 'events_pair_compatibility')}: <b>{p.score}%</b>"
             )
             await bot.send_message(chat_id=a.telegram_id, text=intro_a, parse_mode="HTML")
 
@@ -162,15 +158,26 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
                 expanded=False,
                 lang=lang_a,
             )
-            await bot.send_message(chat_id=a.telegram_id, text=profile_text_b, parse_mode="HTML")
-
-            more_b = _clean_full_description(getattr(b, "full_description", None))
-            if more_b:
-                more_text_b = (
-                    f"<b>{t(lang_a, 'card_more')}:</b>\n"
-                    f"<blockquote>{html.escape(more_b)}</blockquote>"
+            kb_a = get_event_pair_profile_keyboard(
+                lang=lang_a,
+                partner_id=b.telegram_id,
+                dm_link=_dm_link(b),
+            )
+            if b.photo_id and len(profile_text_b) <= 1024:
+                await bot.send_photo(
+                    chat_id=a.telegram_id,
+                    photo=b.photo_id,
+                    caption=profile_text_b,
+                    reply_markup=kb_a,
+                    parse_mode="HTML",
                 )
-                await bot.send_message(chat_id=a.telegram_id, text=more_text_b, parse_mode="HTML")
+            else:
+                await bot.send_message(
+                    chat_id=a.telegram_id,
+                    text=profile_text_b,
+                    reply_markup=kb_a,
+                    parse_mode="HTML",
+                )
 
             await EventsRepository.mark_notified(session, event.id, a.telegram_id, b.telegram_id)
             sent_users += 1
@@ -181,10 +188,9 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
         try:
             lang_b = getattr(b, "language", None) or "ru"
             intro_b = (
-                "Привет! 🎉\n"
-                "Мы нашли тебе пару на мероприятие.\n"
-                f"Ваша совместимость: <b>{p.score}%</b>. Удачно пообщаться!\n\n"
-                f"Ссылка на профиль: {_dm_link(a)}"
+                f"{t(lang_b, 'events_pair_boom_title')}\n\n"
+                f"{t(lang_b, 'events_pair_boom_text')}\n"
+                f"{t(lang_b, 'events_pair_compatibility')}: <b>{p.score}%</b>"
             )
             await bot.send_message(chat_id=b.telegram_id, text=intro_b, parse_mode="HTML")
 
@@ -194,15 +200,26 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
                 expanded=False,
                 lang=lang_b,
             )
-            await bot.send_message(chat_id=b.telegram_id, text=profile_text_a, parse_mode="HTML")
-
-            more_a = _clean_full_description(getattr(a, "full_description", None))
-            if more_a:
-                more_text_a = (
-                    f"<b>{t(lang_b, 'card_more')}:</b>\n"
-                    f"<blockquote>{html.escape(more_a)}</blockquote>"
+            kb_b = get_event_pair_profile_keyboard(
+                lang=lang_b,
+                partner_id=a.telegram_id,
+                dm_link=_dm_link(a),
+            )
+            if a.photo_id and len(profile_text_a) <= 1024:
+                await bot.send_photo(
+                    chat_id=b.telegram_id,
+                    photo=a.photo_id,
+                    caption=profile_text_a,
+                    reply_markup=kb_b,
+                    parse_mode="HTML",
                 )
-                await bot.send_message(chat_id=b.telegram_id, text=more_text_a, parse_mode="HTML")
+            else:
+                await bot.send_message(
+                    chat_id=b.telegram_id,
+                    text=profile_text_a,
+                    reply_markup=kb_b,
+                    parse_mode="HTML",
+                )
 
             await EventsRepository.mark_notified(session, event.id, b.telegram_id, a.telegram_id)
             sent_users += 1

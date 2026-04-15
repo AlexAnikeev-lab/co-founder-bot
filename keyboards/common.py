@@ -36,8 +36,11 @@ def get_accept_and_cancel_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     from texts.i18n import t
     builder = InlineKeyboardBuilder()
     builder.add(InlineKeyboardButton(text=t(lang, "accept_and_continue"), callback_data="accept_legal"))
-    builder.add(InlineKeyboardButton(text=t(lang, "btn_cancel"), callback_data="cancel"))
-    builder.adjust(2)
+    if lang != "en":
+        builder.add(InlineKeyboardButton(text=t(lang, "btn_cancel"), callback_data="cancel"))
+        builder.adjust(2)
+    else:
+        builder.adjust(1)
     return builder.as_markup()
 
 

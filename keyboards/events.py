@@ -54,3 +54,35 @@ def get_event_card_keyboard(
     builder.add(get_back_button("events_list", lang))
     builder.adjust(1)
     return builder.as_markup()
+
+
+def get_event_pair_profile_keyboard(*, lang: str, partner_id: int, dm_link: str) -> InlineKeyboardMarkup:
+    """Кнопки карточки подобранной пары: Подробнее + Написать в ЛС."""
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(
+            text=t(lang, "card_more"),
+            callback_data=f"event_pair_more:{partner_id}",
+        )
+    )
+    builder.add(
+        InlineKeyboardButton(
+            text=t(lang, "btn_go_to_dm"),
+            url=dm_link,
+        )
+    )
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_event_pair_details_keyboard(*, lang: str, dm_link: str) -> InlineKeyboardMarkup:
+    """Кнопка под сообщением с деталями пары: только Написать в ЛС."""
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(
+            text=t(lang, "btn_go_to_dm"),
+            url=dm_link,
+        )
+    )
+    builder.adjust(1)
+    return builder.as_markup()

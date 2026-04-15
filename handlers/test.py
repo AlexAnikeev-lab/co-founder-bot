@@ -392,6 +392,23 @@ async def next_question(callback: CallbackQuery, state: FSMContext) -> None:
         await handle_error(None, e, "next_question")
 
 
+@router.callback_query(F.data.startswith("prev_question:"))
+async def prev_question(callback: CallbackQuery, state: FSMContext) -> None:
+    """Переход к предыдущему вопросу"""
+    try:
+        await callback.answer()
+        parts = callback.data.split(":")
+        test_type = parts[1]
+        prev_question_num = int(parts[2])
+
+        await state.update_data(current_question=prev_question_num)
+        await show_question(callback, state, test_type, prev_question_num)
+
+    except Exception as e:
+        logger.error(f"Ошибка в prev_question: {e}", exc_info=True)
+        await handle_error(None, e, "prev_question")
+
+
 @router.callback_query(F.data.startswith("finish_test:"))
 async def finish_test_handler(callback: CallbackQuery, state: FSMContext) -> None:
     """Завершение теста по кнопке"""

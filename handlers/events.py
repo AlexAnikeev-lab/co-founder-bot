@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+import html
 
 from aiogram import Router, F
 from aiogram.types import FSInputFile
@@ -16,11 +17,14 @@ from config import get_events_list_photo_file_id, get_events_list_photo_path
 from keyboards.events import (
     EventsCallbackData,
     get_event_card_keyboard,
+    get_event_pair_details_keyboard,
     get_events_list_keyboard,
 )
 from keyboards.menu import get_main_menu_keyboard
 from repositories.user_repository import UserRepository
+from repositories.test_repository import TestResultRepository
 from repositories.events_repository import EventsRepository, Event
+from services.compatibility_service import CompatibilityService
 from texts.i18n import t, text_options
 from utils.errors import handle_error
 from utils.event_detail_payload import (
@@ -273,6 +277,72 @@ async def events_join(callback: CallbackQuery, callback_data: EventsCallbackData
         logger.error("Ошибка регистрации на мероприятие: %s", e, exc_info=True)
         await handle_error(None, e, "events_join")
         await callback.answer(t("ru", "error_try_later"), show_alert=True)
+
+
+@router.callback_query(F.data.startswith("event_pair_more:"))
+async def events_pair_more(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Показать расширенную информацию о подобранной паре для мероприятия."""
+    if not callback.from_user or not callback.message:
+        return
+    await callback.answer()
+    try:
+        parts = (callback.data or "").split(":")
+        if len(parts) != 2:
+            return
+        partner_id = int(parts[1])
+        viewer_id = callback.from_user.id
+
+        viewer = await UserRepository.get_by_telegram_id(session, viewer_id)
+        partner = await UserRepository.get_by_telegram_id(session, partner_id)
+        lang = (getattr(viewer, "language", None) or "ru") if viewer else "ru"
+        if not partner:
+            await callback.answer(t(lang, "profile_unavailable"), show_alert=True)
+            return
+
+        compatibility_explanation = None
+        tr_viewer = await TestResultRepository.get_by_user_id(session, viewer_id)
+        tr_partner = await TestResultRepository.get_by_user_id(session, partner_id)
+        if tr_viewer and tr_partner and tr_viewer.main_test_completed and tr_partner.main_test_completed:
+            from handlers.swipe import _get_user_profile
+            pv = _get_user_profile(tr_viewer, include_label=True)
+            pp = _get_user_profile(tr_partner, include_label=True)
+            if pv and pp:
+                score, details = CompatibilityService.calculate_compatibility_detailed(pv, pp)
+                compatibility_explanation = CompatibilityService.get_compatibility_explanation(score, details)
+
+        from handlers.swipe import _clean_full_description
+        details_parts: list[str] = []
+        more = _clean_full_description(getattr(partner, "full_description", None))
+        if more:
+            details_parts.append(f"<b>{t(lang, 'card_more')}:</b>")
+            details_parts.append(f"<blockquote>{html.escape(more)}</blockquote>")
+        if compatibility_explanation:
+            details_parts.append(f"<b>{t(lang, 'card_why_compatibility')}</b>")
+            details_parts.append(compatibility_explanation)
+        if not details_parts:
+            details_parts.append(t(lang, "events_pair_more_empty"))
+
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+
+        await callback.message.answer(
+            "\n\n".join(details_parts),
+            reply_markup=get_event_pair_details_keyboard(lang=lang, dm_link=_dm_link(partner)),
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.error("Ошибка показа деталей пары мероприятия: %s", e, exc_info=True)
+        await handle_error(None, e, "events_pair_more")
+        await callback.answer(t("ru", "error_try_later"), show_alert=True)
+
+
+def _dm_link(user) -> str:
+    username = (getattr(user, "username", None) or "").strip().lstrip("@")
+    if username:
+        return f"https://t.me/{username}"
+    return f"tg://user?id={user.telegram_id}"
 
 
 def register_handlers(dp) -> None:

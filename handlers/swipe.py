@@ -41,6 +41,33 @@ from sqlalchemy import select, and_
 router = Router()
 logger = logging.getLogger(__name__)
 
+
+def _remove_expand_controls(reply_markup: InlineKeyboardMarkup | None) -> InlineKeyboardMarkup | None:
+    """Удаляет кнопки expand/collapse из inline-клавиатуры, сохраняя остальные."""
+    if not reply_markup or not getattr(reply_markup, "inline_keyboard", None):
+        return reply_markup
+
+    filtered_rows: list[list[InlineKeyboardButton]] = []
+    for row in reply_markup.inline_keyboard:
+        filtered_row: list[InlineKeyboardButton] = []
+        for btn in row:
+            cb = getattr(btn, "callback_data", None) or ""
+            if (
+                cb.startswith("expand_profile")
+                or cb.startswith("collapse_profile")
+                or cb.startswith("expand_favorites")
+                or cb.startswith("collapse_favorites")
+            ):
+                continue
+            filtered_row.append(btn)
+        if filtered_row:
+            filtered_rows.append(filtered_row)
+
+    if not filtered_rows:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=filtered_rows)
+
+
 async def _send_like_notification(
     bot: Bot,
     chat_id: int,
@@ -732,23 +759,21 @@ async def handle_partners_reply_action(
         await message.answer(t(err_lang, "partners_error_try_again"))
 
 
-def _is_notification_keyboard(callback_data: str) -> bool:
-    """Проверка, что callback из уведомления (notif)."""
-    return "expand_profile_notif" in callback_data or "collapse_profile_notif" in callback_data
-
-
 @router.callback_query(F.data.startswith("expand_profile"))
 @router.callback_query(F.data.startswith("collapse_profile"))
 async def handle_expand_collapse_profile(callback: CallbackQuery) -> None:
     """
-    Развернуть / свернуть описание в карточке анкеты.
-    При развороте добавляется полное описание и блок «Почему такая совместимость» красивыми словами.
+    Показать дополнительный блок по кнопке «Подробнее».
+    При нажатии «Подробнее» отправляется отдельное сообщение ниже карточки
+    с полным описанием и блоком «Почему такая совместимость».
     """
     await callback.answer()
     try:
         raw = callback.data
         is_expand = raw.startswith("expand_profile:") or raw.startswith("expand_profile_notif:")
-        is_notif = _is_notification_keyboard(raw)
+        if not is_expand:
+            # Для текущего UX «Свернуть» ничего не меняет в исходной карточке.
+            return
         parts = callback.data.split(":")
         if len(parts) != 2:
             return
@@ -780,25 +805,24 @@ async def handle_expand_collapse_profile(callback: CallbackQuery) -> None:
                                 compatibility, details
                             )
 
-            caption_or_text = format_user_profile(
-                user,
-                compatibility,
-                expanded=is_expand,
-                compatibility_explanation=compatibility_explanation,
-                lang=lang,
-            )
-            if is_notif:
-                kb = get_swipe_keyboard_from_notification(swiped_user_id, expanded=is_expand, lang=lang)
-            else:
-                kb = get_swipe_keyboard_expand_only(
-                    swiped_user_id, expanded=is_expand, from_notification=False, lang=lang
-                )
+            details_parts: list[str] = []
+            display_full = _clean_full_description(user.full_description)
+            if display_full:
+                details_parts.append(f"<b>{t(lang, 'card_more')}:</b>")
+                details_parts.append(f"<blockquote>{html.escape(display_full)}</blockquote>")
 
-            msg = callback.message
-            if msg.photo:
-                await msg.edit_caption(caption=caption_or_text, reply_markup=kb)
-            else:
-                await msg.edit_text(text=caption_or_text, reply_markup=kb)
+            if compatibility_explanation:
+                details_parts.append(f"<b>{t(lang, 'card_why_compatibility')}</b>")
+                details_parts.append(compatibility_explanation)
+
+            cleaned_markup = _remove_expand_controls(callback.message.reply_markup)
+            try:
+                await callback.message.edit_reply_markup(reply_markup=cleaned_markup)
+            except Exception:
+                pass
+
+            if details_parts:
+                await callback.message.answer("\n\n".join(details_parts))
             break
     except Exception as e:
         logger.error("Ошибка при развороте/сворачивании анкеты: %s", e, exc_info=True)
@@ -809,6 +833,75 @@ async def handle_expand_collapse_profile(callback: CallbackQuery) -> None:
                 _err_lang = getattr(_u, "language", None) or "ru"
             break
         await callback.answer(t(_err_lang, "edit_quality_emoji_error"), show_alert=True)
+
+
+@router.callback_query(F.data.startswith("expand_favorites:"))
+@router.callback_query(F.data.startswith("collapse_favorites:"))
+async def handle_expand_collapse_favorites(callback: CallbackQuery) -> None:
+    """Показать дополнительный блок по кнопке «Подробнее» в избранном."""
+    await callback.answer()
+    try:
+        raw = callback.data or ""
+        is_expand = raw.startswith("expand_favorites:")
+        if not is_expand:
+            return
+
+        parts = raw.split(":")
+        if len(parts) != 3:
+            return
+        swiped_user_id = int(parts[1])
+        viewer_id = callback.from_user.id
+
+        async for session in get_session():
+            user = await UserRepository.get_by_telegram_id(session, swiped_user_id)
+            viewer = await UserRepository.get_by_telegram_id(session, viewer_id)
+            lang = (getattr(viewer, "language", None) or "ru") if viewer else "ru"
+            if not user:
+                await callback.answer(t(lang, "profile_unavailable"), show_alert=True)
+                return
+
+            compatibility = None
+            compatibility_explanation = None
+            tr_viewer = await TestResultRepository.get_by_user_id(session, viewer_id)
+            tr_shown = await TestResultRepository.get_by_user_id(session, swiped_user_id)
+            if tr_viewer and tr_shown and tr_viewer.main_test_completed and tr_shown.main_test_completed:
+                pv = _get_user_profile(tr_viewer, include_label=True)
+                pl = _get_user_profile(tr_shown, include_label=True)
+                if pv and pl:
+                    compatibility, details = CompatibilityService.calculate_compatibility_detailed(pv, pl)
+                    if compatibility is not None:
+                        compatibility_explanation = CompatibilityService.get_compatibility_explanation(
+                            compatibility, details
+                        )
+
+            details_parts: list[str] = []
+            display_full = _clean_full_description(user.full_description)
+            if display_full:
+                details_parts.append(f"<b>{t(lang, 'card_more')}:</b>")
+                details_parts.append(f"<blockquote>{html.escape(display_full)}</blockquote>")
+
+            if compatibility_explanation:
+                details_parts.append(f"<b>{t(lang, 'card_why_compatibility')}</b>")
+                details_parts.append(compatibility_explanation)
+
+            cleaned_markup = _remove_expand_controls(callback.message.reply_markup)
+            try:
+                await callback.message.edit_reply_markup(reply_markup=cleaned_markup)
+            except Exception:
+                pass
+
+            if details_parts:
+                await callback.message.answer("\n\n".join(details_parts))
+            break
+    except Exception as e:
+        logger.error("Ошибка при развороте карточки в избранном: %s", e, exc_info=True)
+        _err_lang = "ru"
+        async for _s in get_session():
+            _u = await UserRepository.get_by_telegram_id(_s, callback.from_user.id)
+            if _u:
+                _err_lang = getattr(_u, "language", None) or "ru"
+            break
+        await callback.answer(t(_err_lang, "error_try_later"), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("view_liker:"))
