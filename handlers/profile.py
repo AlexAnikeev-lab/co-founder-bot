@@ -801,12 +801,14 @@ async def start_edit_name(callback: CallbackQuery, state: FSMContext) -> None:
             if user.name:
                 text += f"\n\n{t(lang, 'edit_current_copyable')}\n<code>{html.escape(user.name)}</code>"
         break
+    target_message_id = callback.message.message_id
     try:
         await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_cancel_button(lang))
+        sent = await callback.message.answer(text, reply_markup=get_cancel_button(lang))
+        target_message_id = sent.message_id
     await state.set_state(ProfileEditStates.editing_name)
-    await state.update_data(last_bot_message_id=callback.message.message_id)
+    await state.update_data(last_bot_message_id=target_message_id)
 
 
 @router.message(ProfileEditStates.editing_name)
@@ -861,18 +863,20 @@ async def start_edit_photo(callback: CallbackQuery, state: FSMContext) -> None:
             lang = getattr(user, "language", None) or "ru"
         break
     text = t(lang, "edit_photo_title") + "\n\n" + t(lang, "edit_photo_request")
+    target_message_id = callback.message.message_id
     try:
         await callback.message.edit_text(
             text,
             reply_markup=get_cancel_button(lang)
         )
     except Exception:
-        await callback.message.answer(
+        sent = await callback.message.answer(
             text,
             reply_markup=get_cancel_button(lang)
         )
+        target_message_id = sent.message_id
     await state.set_state(ProfileEditStates.editing_photo)
-    await state.update_data(last_bot_message_id=callback.message.message_id)
+    await state.update_data(last_bot_message_id=target_message_id)
 
 
 @router.message(ProfileEditStates.editing_photo, F.photo)
@@ -913,12 +917,14 @@ async def start_edit_short_description(callback: CallbackQuery, state: FSMContex
         else:
             text = t(lang, "short_description_request")
         break
+    target_message_id = callback.message.message_id
     try:
         await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_cancel_button(lang))
+        sent = await callback.message.answer(text, reply_markup=get_cancel_button(lang))
+        target_message_id = sent.message_id
     await state.set_state(ProfileEditStates.editing_short_description)
-    await state.update_data(last_bot_message_id=callback.message.message_id)
+    await state.update_data(last_bot_message_id=target_message_id)
 
 
 @router.message(ProfileEditStates.editing_short_description)
@@ -978,12 +984,14 @@ async def start_edit_full_description(callback: CallbackQuery, state: FSMContext
         else:
             text = t(lang, "full_description_request")
         break
+    target_message_id = callback.message.message_id
     try:
         await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_cancel_button(lang))
+        sent = await callback.message.answer(text, reply_markup=get_cancel_button(lang))
+        target_message_id = sent.message_id
     await state.set_state(ProfileEditStates.editing_full_description)
-    await state.update_data(last_bot_message_id=callback.message.message_id)
+    await state.update_data(last_bot_message_id=target_message_id)
 
 
 @router.message(ProfileEditStates.editing_full_description)
@@ -1067,6 +1075,7 @@ async def _start_edit_quality(
     from keyboards.common import get_cancel_button
     text = request_text
     lang = "ru"
+    target_message_id = callback.message.message_id
     try:
         async for session in get_session():
             user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
@@ -1087,9 +1096,10 @@ async def _start_edit_quality(
             break
         await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
     except Exception:
-        await callback.message.answer(text, reply_markup=get_cancel_button(lang))
+        sent = await callback.message.answer(text, reply_markup=get_cancel_button(lang))
+        target_message_id = sent.message_id
     await state.set_state(edit_state)
-    await state.update_data(last_bot_message_id=callback.message.message_id, editing_quality_index=quality_index)
+    await state.update_data(last_bot_message_id=target_message_id, editing_quality_index=quality_index)
 
 
 @router.callback_query(F.data == "edit_quality_1")
@@ -1150,22 +1160,9 @@ async def _process_edit_quality(
         else:
             base_err = f"{base_err} You now have: {length}."
         err_text = base_err
-        if last_msg_id:
-            try:
-                await message.bot.edit_message_text(
-                    chat_id=message.chat.id,
-                    message_id=last_msg_id,
-                    text=err_text,
-                    reply_markup=None,
-                )
-            except Exception:
-                from keyboards.common import get_cancel_button
-                sent = await message.answer(err_text, reply_markup=get_cancel_button(lang))
-                await state.update_data(last_bot_message_id=sent.message_id)
-        else:
-            from keyboards.common import get_cancel_button
-            sent = await message.answer(err_text, reply_markup=get_cancel_button(lang))
-            await state.update_data(last_bot_message_id=sent.message_id)
+        from keyboards.common import get_cancel_button
+        sent = await message.answer(err_text, reply_markup=get_cancel_button(lang))
+        await state.update_data(last_quality_error_message_id=sent.message_id)
         return
 
     if text_contains_emoji(message.text):
@@ -1191,7 +1188,16 @@ async def _process_edit_quality(
             await bot.delete_message(chat_id=chat_id, message_id=data["last_warning_message_id"])
         except Exception:
             pass
-    await state.update_data(invalid_user_message_ids=[], last_warning_message_id=None)
+    if data.get("last_quality_error_message_id"):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=data["last_quality_error_message_id"])
+        except Exception:
+            pass
+    await state.update_data(
+        invalid_user_message_ids=[],
+        last_warning_message_id=None,
+        last_quality_error_message_id=None,
+    )
 
     # Сохраняем новый текст и показываем выбор эмодзи (как при регистрации)
     new_value = message.text.strip()

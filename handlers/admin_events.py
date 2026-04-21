@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 
 from aiogram import Router, F
@@ -327,7 +328,8 @@ async def admin_events_participants(
     for tid in ids[:50]:
         u = await UserRepository.get_by_telegram_id(session, tid)
         name = (u.name if u and u.name else f"ID{tid}")
-        lines.append(f"• {name} — <code>{tid}</code>")
+        profile_link = f'<a href="tg://user?id={tid}">{html.escape(name)}</a>'
+        lines.append(f"• {profile_link} — <code>{tid}</code>")
     if len(ids) > 50:
         lines.append(f"\n... и ещё {len(ids) - 50}")
     await callback.message.edit_text(

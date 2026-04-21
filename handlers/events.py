@@ -10,6 +10,8 @@ import html
 from aiogram import Router, F
 from aiogram.types import FSInputFile
 from aiogram.types import CallbackQuery, Message
+from aiogram.types import InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +23,7 @@ from keyboards.events import (
     get_events_list_keyboard,
 )
 from keyboards.menu import get_main_menu_keyboard
+from keyboards.common import get_back_button
 from repositories.user_repository import UserRepository
 from repositories.test_repository import TestResultRepository
 from repositories.events_repository import EventsRepository, Event
@@ -269,7 +272,49 @@ async def events_join(callback: CallbackQuery, callback_data: EventsCallbackData
     if not callback.from_user or not callback.message:
         return
     try:
+        user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
         lang, _ = await _get_lang_and_minor(session, callback.from_user.id)
+        if not user or not user.is_registered:
+            await callback.answer()
+            await callback.message.answer(t(lang, "not_registered_use_start"))
+            return
+
+        test_result = await TestResultRepository.get_by_user_id(session, callback.from_user.id)
+        if not test_result or not test_result.main_test_completed:
+            builder = InlineKeyboardBuilder()
+            builder.add(
+                InlineKeyboardButton(
+                    text=t(lang, "partners_btn_take_test"),
+                    callback_data="start_test:main",
+                )
+            )
+            builder.add(get_back_button("main_menu", lang))
+            builder.adjust(1)
+            await callback.answer()
+            await callback.message.answer(
+                f"{t(lang, 'events_title')}\n\n{t(lang, 'partners_main_test_required')}",
+                reply_markup=builder.as_markup(),
+            )
+            return
+
+        missing_fields: list[str] = []
+        if not user.short_description:
+            missing_fields.append(t(lang, "partners_field_short_desc"))
+        if not user.full_description:
+            missing_fields.append(t(lang, "partners_field_full_desc"))
+        if not user.qualities:
+            missing_fields.append(t(lang, "partners_field_qualities"))
+        if missing_fields:
+            builder = InlineKeyboardBuilder()
+            builder.add(get_back_button("main_menu", lang))
+            builder.adjust(1)
+            await callback.answer()
+            await callback.message.answer(
+                f"{t(lang, 'events_title')}\n\n{t(lang, 'partners_fill_profile').format(fields=', '.join(missing_fields))}",
+                reply_markup=builder.as_markup(),
+            )
+            return
+
         ok = await EventsRepository.register_user(session, callback_data.event_id, callback.from_user.id)
         await callback.answer()
         await callback.message.answer(t(lang, "events_join_ok") if ok else t(lang, "events_join_already"))
