@@ -29,6 +29,10 @@ from keyboards.swipe import (
 )
 from utils.match_logger import log_match_comparison
 from utils.compatibility_logger import log_compatibility_calculation, log_compatibility_show_minimal
+from utils.profile_translator import (
+    translate_qualities_for_language,
+    translate_text_for_language,
+)
 from keyboards.menu import get_main_menu_keyboard
 from keyboards.common import get_back_button
 from texts.i18n import t, text_options
@@ -176,6 +180,9 @@ def format_user_profile(
     expanded: bool = False,
     compatibility_explanation: Optional[str] = None,
     lang: str = "ru",
+    short_description_override: Optional[str] = None,
+    full_description_override: Optional[str] = None,
+    qualities_override: Optional[str] = None,
 ) -> str:
     """
     Форматирование анкеты пользователя для показа.
@@ -208,17 +215,27 @@ def format_user_profile(
 
     if compatibility is not None:
         text_parts.append(f"🔗 {t(lang, 'card_compatibility')}: {compatibility}%")
+        text_parts.append("")
 
-    qualities_display = _parse_qualities_display(user.qualities, lang)
+    qualities_raw = qualities_override if qualities_override is not None else user.qualities
+    short_description = (
+        short_description_override if short_description_override is not None else user.short_description
+    )
+    full_description_raw = (
+        full_description_override if full_description_override is not None else user.full_description
+    )
+
+    qualities_display = _parse_qualities_display(qualities_raw, lang)
     if qualities_display:
         heading = t(lang, "card_qualities_heading")
         qualities_text = "\n".join(qualities_display)
-        text_parts.append(f"⭐ <b>{heading}:</b>\n{qualities_text}")
+        text_parts.append(f"⭐ <b>{heading}:</b>")
+        text_parts.append(qualities_text)
 
-    if user.short_description:
-        text_parts.append(f"<blockquote>{html.escape(user.short_description)}</blockquote>")
+    if short_description:
+        text_parts.append(f"<blockquote>{html.escape(short_description)}</blockquote>")
     if expanded:
-        display_full = _clean_full_description(user.full_description)
+        display_full = _clean_full_description(full_description_raw)
         if display_full:
             text_parts.append("")
             text_parts.append(f"<b>{t(lang, 'card_more')}:</b>")
@@ -477,7 +494,17 @@ async def show_next_profile(
 
         lang = getattr(current_user, "language", None) or "ru"
         has_super_like = getattr(current_user, "subscription_active", False) and not getattr(current_user, "super_like_used", False)
-        profile_text = format_user_profile(next_user, compatibility, lang=lang)
+        translated_short = await translate_text_for_language(next_user.short_description, lang)
+        translated_full = await translate_text_for_language(next_user.full_description, lang)
+        translated_qualities = await translate_qualities_for_language(next_user.qualities, lang)
+        profile_text = format_user_profile(
+            next_user,
+            compatibility,
+            lang=lang,
+            short_description_override=translated_short,
+            full_description_override=translated_full,
+            qualities_override=translated_qualities,
+        )
         if in_partners:
             swipe_kb = get_swipe_keyboard_expand_only(
                 next_user.telegram_id, expanded=False, from_notification=False, lang=lang
@@ -802,11 +829,12 @@ async def handle_expand_collapse_profile(callback: CallbackQuery) -> None:
                         compatibility, details = CompatibilityService.calculate_compatibility_detailed(pv, pl)
                         if is_expand and compatibility is not None:
                             compatibility_explanation = CompatibilityService.get_compatibility_explanation(
-                                compatibility, details
+                                compatibility, details, lang=lang
                             )
 
             details_parts: list[str] = []
-            display_full = _clean_full_description(user.full_description)
+            translated_full = await translate_text_for_language(user.full_description, lang)
+            display_full = _clean_full_description(translated_full)
             if display_full:
                 details_parts.append(f"<b>{t(lang, 'card_more')}:</b>")
                 details_parts.append(f"<blockquote>{html.escape(display_full)}</blockquote>")
@@ -871,11 +899,12 @@ async def handle_expand_collapse_favorites(callback: CallbackQuery) -> None:
                     compatibility, details = CompatibilityService.calculate_compatibility_detailed(pv, pl)
                     if compatibility is not None:
                         compatibility_explanation = CompatibilityService.get_compatibility_explanation(
-                            compatibility, details
+                            compatibility, details, lang=lang
                         )
 
             details_parts: list[str] = []
-            display_full = _clean_full_description(user.full_description)
+            translated_full = await translate_text_for_language(user.full_description, lang)
+            display_full = _clean_full_description(translated_full)
             if display_full:
                 details_parts.append(f"<b>{t(lang, 'card_more')}:</b>")
                 details_parts.append(f"<blockquote>{html.escape(display_full)}</blockquote>")
@@ -959,7 +988,17 @@ async def handle_view_liker(callback: CallbackQuery) -> None:
                     )
                 except Exception:
                     pass
-            profile_text = format_user_profile(liker, compatibility, lang=lang)
+            translated_short = await translate_text_for_language(liker.short_description, lang)
+            translated_full = await translate_text_for_language(liker.full_description, lang)
+            translated_qualities = await translate_qualities_for_language(liker.qualities, lang)
+            profile_text = format_user_profile(
+                liker,
+                compatibility,
+                lang=lang,
+                short_description_override=translated_short,
+                full_description_override=translated_full,
+                qualities_override=translated_qualities,
+            )
             try:
                 await callback.message.delete()
             except Exception:
@@ -1138,7 +1177,18 @@ async def _show_next_favorite_or_empty(
             pl = _get_user_profile(tr_shown, include_label=True)
             if pv and pl:
                 compatibility, _ = CompatibilityService.calculate_compatibility_detailed(pv, pl)
-        profile_text = format_user_profile(user, compatibility, expanded=False, lang=lang)
+        translated_short = await translate_text_for_language(user.short_description, lang)
+        translated_full = await translate_text_for_language(user.full_description, lang)
+        translated_qualities = await translate_qualities_for_language(user.qualities, lang)
+        profile_text = format_user_profile(
+            user,
+            compatibility,
+            expanded=False,
+            lang=lang,
+            short_description_override=translated_short,
+            full_description_override=translated_full,
+            qualities_override=translated_qualities,
+        )
         total = len(new_ids)
         kb = get_favorites_keyboard(uid, 0, total, expanded=False, lang=lang)
         if send_new_message:
@@ -1342,7 +1392,17 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
                             next_data = await get_next_user_for_swipe(sess, swiper_user_id, current_user)
                             if next_data:
                                 nu, comp = next_data
-                                text = format_user_profile(nu, comp, lang=lang)
+                                translated_short = await translate_text_for_language(nu.short_description, lang)
+                                translated_full = await translate_text_for_language(nu.full_description, lang)
+                                translated_qualities = await translate_qualities_for_language(nu.qualities, lang)
+                                text = format_user_profile(
+                                    nu,
+                                    comp,
+                                    lang=lang,
+                                    short_description_override=translated_short,
+                                    full_description_override=translated_full,
+                                    qualities_override=translated_qualities,
+                                )
                                 if nu.photo_id:
                                     await callback.message.answer_photo(
                                         photo=nu.photo_id,

@@ -700,7 +700,7 @@ async def handle_expand_collapse_favorites(callback: CallbackQuery, state: FSMCo
                 compatibility, details = CompatibilityService.calculate_compatibility_detailed(pv, pl)
                 if is_expand and compatibility is not None:
                     compatibility_explanation = CompatibilityService.get_compatibility_explanation(
-                        compatibility, details
+                        compatibility, details, lang=lang
                     )
         profile_text = format_user_profile(
             user, compatibility, expanded=is_expand, compatibility_explanation=compatibility_explanation, lang=lang

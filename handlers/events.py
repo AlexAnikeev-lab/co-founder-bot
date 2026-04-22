@@ -353,7 +353,7 @@ async def events_pair_more(callback: CallbackQuery, session: AsyncSession) -> No
             pp = _get_user_profile(tr_partner, include_label=True)
             if pv and pp:
                 score, details = CompatibilityService.calculate_compatibility_detailed(pv, pp)
-                compatibility_explanation = CompatibilityService.get_compatibility_explanation(score, details)
+                compatibility_explanation = CompatibilityService.get_compatibility_explanation(score, details, lang=lang)
 
         from handlers.swipe import _clean_full_description
         details_parts: list[str] = []

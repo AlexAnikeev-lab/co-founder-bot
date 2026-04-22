@@ -5,6 +5,7 @@
 
 from typing import Optional, Dict, Tuple
 import json
+from texts.i18n import t
 
 
 class CompatibilityService:
@@ -545,55 +546,37 @@ class CompatibilityService:
         return final_compatibility, details
 
     @staticmethod
-    def get_compatibility_explanation(score: int, details: Dict[str, any]) -> str:
+    def get_compatibility_explanation(score: int, details: Dict[str, any], lang: str = "ru") -> str:
         """
         Формирует структурированный текст «почему такая совместимость»:
         секции «По тестам», «Роли в команде», «Учтено при расчёте» (штрафы), «Итог».
         """
-        from texts.messages import (
-            COMPAT_SECTION_TESTS,
-            COMPAT_SECTION_ROLES,
-            COMPAT_SECTION_PENALTY,
-            COMPAT_SECTION_SUMMARY,
-            COMPAT_FACTOR_ETHICS,
-            COMPAT_FACTOR_GOALS,
-            COMPAT_FACTOR_RISK,
-            COMPAT_FACTOR_DECISION,
-            COMPAT_FACTOR_COMM,
-            COMPAT_VERY_CLOSE,
-            COMPAT_SOME_DIFF,
-            COMPAT_DIFFERENT,
-            COMPAT_SUMMARY_HIGH,
-            COMPAT_SUMMARY_MID,
-            COMPAT_SUMMARY_LOW,
-        )
-
         blocks = []
 
         # ——— Секция: по результатам тестов (списком) ———
         e1 = details.get("E1_scores") or {}
         scores = {
-            "ethics": (e1.get("score_ethics"), COMPAT_FACTOR_ETHICS),
-            "goals": (e1.get("score_goals"), COMPAT_FACTOR_GOALS),
-            "risk": (e1.get("score_risk"), COMPAT_FACTOR_RISK),
-            "decision": (e1.get("score_decision"), COMPAT_FACTOR_DECISION),
-            "comm": (e1.get("score_comm"), COMPAT_FACTOR_COMM),
+            "ethics": (e1.get("score_ethics"), t(lang, "compat_factor_ethics")),
+            "goals": (e1.get("score_goals"), t(lang, "compat_factor_goals")),
+            "risk": (e1.get("score_risk"), t(lang, "compat_factor_risk")),
+            "decision": (e1.get("score_decision"), t(lang, "compat_factor_decision")),
+            "comm": (e1.get("score_comm"), t(lang, "compat_factor_comm")),
         }
         lines = []
         for key, (val, label) in scores.items():
             if val is None:
                 continue
             if val >= 80:
-                suffix = f" ({COMPAT_VERY_CLOSE})"
+                suffix = f" ({t(lang, 'compat_suffix_very_close')})"
             elif val >= 60:
                 suffix = ""
             elif val >= 40:
-                suffix = f" ({COMPAT_SOME_DIFF})"
+                suffix = f" ({t(lang, 'compat_suffix_some_diff')})"
             else:
-                suffix = f" ({COMPAT_DIFFERENT})"
+                suffix = f" ({t(lang, 'compat_suffix_different')})"
             lines.append(f"• {label} — {val}%{suffix}")
         if lines:
-            blocks.append(f"{COMPAT_SECTION_TESTS}\n" + "\n".join(lines))
+            blocks.append(f"{t(lang, 'compat_section_tests')}\n" + "\n".join(lines))
 
         # ——— Секция: роли в команде ———
         profile_a = details.get("profile_a") or {}
@@ -602,10 +585,10 @@ class CompatibilityService:
         label_b = profile_b.get("profile_label")
         if label_a and label_b:
             if label_a == label_b:
-                role_text = f"Вы оба — <b>{label_a}</b>. Такие люди быстрее находят общий язык."
+                role_text = t(lang, "compat_roles_same", role=label_a)
             else:
-                role_text = f"Вы — <b>{label_a}</b>, он(а) — <b>{label_b}</b>. Разные роли часто дополняют друг друга."
-            blocks.append(f"{COMPAT_SECTION_ROLES}\n{role_text}")
+                role_text = t(lang, "compat_roles_diff", role_a=label_a, role_b=label_b)
+            blocks.append(f"{t(lang, 'compat_section_roles')}\n{role_text}")
 
         # ——— Секция: штрафы (если есть) ———
         penalty = details.get("E4_penalty") or 0
@@ -614,27 +597,28 @@ class CompatibilityService:
             rf_names = []
             for p in penalty_details:
                 if "Ethics" in p:
-                    rf_names.append("ценностям")
+                    rf_names.append(t(lang, "compat_penalty_ethics"))
                 elif "Goals" in p:
-                    rf_names.append("целям")
+                    rf_names.append(t(lang, "compat_penalty_goals"))
                 elif "Risk" in p:
-                    rf_names.append("риску")
+                    rf_names.append(t(lang, "compat_penalty_risk"))
                 elif "Comm" in p:
-                    rf_names.append("коммуникации")
+                    rf_names.append(t(lang, "compat_penalty_comm"))
                 elif "Decision" in p:
-                    rf_names.append("решениям")
+                    rf_names.append(t(lang, "compat_penalty_decision"))
             if rf_names:
                 blocks.append(
-                    f"{COMPAT_SECTION_PENALTY}\nОтличия по: {', '.join(rf_names)}. Итоговый балл немного снижен."
+                    f"{t(lang, 'compat_section_penalty')}\n"
+                    f"{t(lang, 'compat_penalty_intro', factors=', '.join(rf_names))}"
                 )
 
         # ——— Секция: итог ———
         if score >= 75:
-            summary = COMPAT_SUMMARY_HIGH
+            summary = t(lang, "compat_summary_high")
         elif score >= 55:
-            summary = COMPAT_SUMMARY_MID
+            summary = t(lang, "compat_summary_mid")
         else:
-            summary = COMPAT_SUMMARY_LOW
-        blocks.append(f"{COMPAT_SECTION_SUMMARY}\n{summary}")
+            summary = t(lang, "compat_summary_low")
+        blocks.append(f"{t(lang, 'compat_section_summary')}\n{summary}")
 
         return "\n\n".join(blocks)
