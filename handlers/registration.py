@@ -621,6 +621,11 @@ async def process_photo_invalid(message: Message, state: FSMContext) -> None:
 async def process_city(message: Message, state: FSMContext) -> None:
     """Обработка города перед блоком сильных качеств."""
     try:
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
         data = await state.get_data()
         last_msg_id = data.get("last_bot_message_id")
         lang = data.get("language", "ru")
