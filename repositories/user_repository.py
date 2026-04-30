@@ -19,6 +19,7 @@ class User(Base):
     username: Mapped[Optional[str]]
     phone: Mapped[Optional[str]]
     name: Mapped[Optional[str]]
+    city: Mapped[Optional[str]]
     age: Mapped[Optional[int]]
     photo_id: Mapped[Optional[str]]
     short_description: Mapped[Optional[str]]  # Краткое описание

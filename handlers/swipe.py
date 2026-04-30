@@ -210,6 +210,9 @@ def format_user_profile(
         text_parts.append(f"{icon} {name_part} | {age_part}")
     else:
         text_parts.append(f"{icon} {name_part}")
+    city_part = (getattr(user, "city", None) or "").strip()
+    if city_part:
+        text_parts.append(f"🏙 <b>{t(lang, 'card_city')}:</b> {html.escape(city_part)}")
 
     text_parts.append("")
 

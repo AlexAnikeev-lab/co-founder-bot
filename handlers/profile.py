@@ -63,6 +63,13 @@ async def send_profile_view(
             f"<b>{t(lang, 'profile_name')}:</b> {user.name or ns}\n"
             f"<b>{t(lang, 'profile_age')}:</b> {user.age or ns}\n\n"
         )
+        if getattr(user, "city", None):
+            profile_text = (
+                f"{t(lang, 'profile_section')}\n\n"
+                f"<b>{t(lang, 'profile_name')}:</b> {user.name or ns}\n"
+                f"<b>{t(lang, 'profile_age')}:</b> {user.age or ns}\n"
+                f"<b>{t(lang, 'profile_city')}:</b> {html.escape(user.city)}\n\n"
+            )
         if user.short_description:
             profile_text += f"<b>{t(lang, 'profile_about')}:</b>\n"
             profile_text += f"<blockquote>{html.escape(user.short_description)}</blockquote>\n\n"
@@ -187,6 +194,8 @@ async def show_profile(event, state: FSMContext) -> None:
             profile_text = f"{t(lang, 'profile_section')}\n\n"
             profile_text += f"<b>{t(lang, 'profile_name')}:</b> {user.name or ns}\n"
             profile_text += f"<b>{t(lang, 'profile_age')}:</b> {user.age or ns}\n\n"
+            if getattr(user, "city", None):
+                profile_text += f"<b>{t(lang, 'profile_city')}:</b> {html.escape(user.city)}\n\n"
             if user.short_description:
                 profile_text += f"<b>{t(lang, 'profile_about')}:</b>\n"
                 profile_text += f"<blockquote>{html.escape(user.short_description)}</blockquote>\n\n"

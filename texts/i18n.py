@@ -59,6 +59,9 @@ T = {
         "photo_request": """📸 <b>Добавь своё фото</b>
 
 <i>Фото будет отображаться в твоей анкете и поможет другим лучше узнать тебя.</i>""",
+        "city_request": """🏙 <b>Укажи город</b>
+
+<i>Город будет отображаться в начале твоей анкеты.</i>""",
         "short_description_request": """✍️ <b>Краткое описание</b>
 
 <i>Напиши в 2-3 предложениях, кто ты и чем занимаешься.
@@ -116,8 +119,10 @@ T = {
         "partners_btn_take_test": "📋 Пройти тест",
         "quality_emoji_prompt": "Выбери смайлик для этого качества:",
         "quality_no_emoji_in_text": "❌ Нельзя использовать эмодзи в тексте. Смайлик можно выбрать позже.",
+        "city_no_emoji_in_text": "❌ Нельзя использовать эмодзи в названии города.",
         "card_no_name": "Без имени",
         "card_years": "лет",
+        "card_city": "Город",
         "card_compatibility": "Совместимость",
         "card_qualities_heading": "Главные качества",
         "card_more": "Подробнее",
@@ -153,6 +158,7 @@ T = {
         "profile_section": "👤 <b>Профиль</b>",
         "profile_name": "Имя",
         "profile_age": "Возраст",
+        "profile_city": "Город",
         "profile_about": "О себе",
         "profile_qualities": "Главные качества",
         "profile_more": "Подробнее",
@@ -402,6 +408,9 @@ They're needed for the bot to work correctly and for us to stay in touch.""",
         "photo_request": """📸 <b>Add your photo</b>
 
 <i>It will be shown in your profile and help others get to know you.</i>""",
+        "city_request": """🏙 <b>Enter your city</b>
+
+<i>Your city will be shown at the top of your profile.</i>""",
         "short_description_request": """✍️ <b>Short description</b>
 
 <i>In 2–3 sentences, who you are and what you do.
@@ -463,8 +472,10 @@ Max 500 characters.""",
         "limit_bookmarks_week": "⛔ Up to {limit} additions to favorites per week. Limit reached. Try again in a few days.",
         "quality_emoji_prompt": "Choose an emoji for this strength:",
         "quality_no_emoji_in_text": "❌ Don't use emoji in the text. You can pick an emoji next.",
+        "city_no_emoji_in_text": "❌ Don't use emoji in the city name.",
         "card_no_name": "No name",
         "card_years": "years",
+        "card_city": "City",
         "card_compatibility": "Compatibility",
         "card_qualities_heading": "Key strengths",
         "card_more": "More",
@@ -499,6 +510,7 @@ Max 500 characters.""",
         "profile_section": "👤 <b>Profile</b>",
         "profile_name": "Name",
         "profile_age": "Age",
+        "profile_city": "City",
         "profile_about": "About",
         "profile_qualities": "Key strengths",
         "profile_more": "More",

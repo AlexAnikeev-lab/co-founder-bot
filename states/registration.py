@@ -13,6 +13,7 @@ class RegistrationStates(StatesGroup):
     waiting_for_telegram_access = State()
     waiting_for_name = State()
     waiting_for_photo = State()
+    waiting_for_city = State()
     waiting_for_short_description = State()
     waiting_for_full_description = State()
     waiting_for_quality_1 = State()

@@ -71,7 +71,7 @@ def _format_admin_event_text(ev) -> str:
     return (
         f"📅 <b>Мероприятие #{ev.position}</b>\n\n"
         f"🔘 <b>Текст кнопки:</b> {ev.title}\n"
-        f"📝 <b>Описание (превью):</b> {desc_note}\n\n"
+        f"📝 <b>Описание (превью, без форматирования):</b> {desc_note}\n\n"
         f"🗑 <b>Удаление карточки:</b> автоматически после окончания <b>{del_day}</b> (сразу после 23:59)\n\n"
         f"🔔 <b>Подбор пар:</b> {'Да' if ev.matching_enabled else 'Нет'}"
     )
@@ -116,7 +116,10 @@ async def admin_events_add_start(callback: CallbackQuery, state: FSMContext) -> 
     await state.set_state(AdminEventsStates.waiting_for_title)
     await callback.message.edit_text(
         "➕ <b>Добавление мероприятия</b>\n\n"
-        "Введите <b>текст для кнопки</b> в списке мероприятий (до 64 символов).\n"
+        "Введите <b>текст для кнопки</b> в списке мероприятий (до 64 символов).\n\n"
+        "<b>Важно:</b> подпись инлайн-кнопки в Telegram — обычная строка без разметки и без "
+        "кастомных премиум-эмодзи: они отобразятся как обычные символы. "
+        "Кастомные эмодзи и оформление задавайте в <b>описании</b> следующим шагом.\n\n"
         "Отмена: /cancel",
         parse_mode="HTML",
     )
@@ -145,8 +148,11 @@ async def admin_events_add_title(message: Message, state: FSMContext) -> None:
     await state.set_state(AdminEventsStates.waiting_for_description)
     await message.answer(
         "Отправьте <b>одно сообщение</b> с описанием мероприятия — бот сохранит его как есть: "
-        "эмодзи, форматирование, цитаты, картинка с подписью и т.д.\n"
-        "(Поддерживаются: текст, фото, видео, GIF, документ с подписью.)",
+        "эмодзи, форматирование, цитаты, <b>кастомные эмодзи</b>, фото с подписью и т.д.\n"
+        "(Поддерживаются: текст, фото, видео, GIF, документ с подписью.)\n\n"
+        "Чтобы кастомные эмодзи в карточке доходили до пользователей, у "
+        "<b>владельца этого бота</b> (аккаунт в BotFather) должна быть активна "
+        "<b>Telegram Premium</b> — иначе клиенты покажут запасной обычный эмодзи.",
         parse_mode="HTML",
     )
 
@@ -522,8 +528,15 @@ async def admin_events_edit_field_pick(
     await state.update_data(admin_edit_event_id=ev.id, admin_edit_field=callback_data.field)
     await state.set_state(AdminEventsStates.waiting_for_edit_field)
     prompts = {
-        "title": "Введите новый текст кнопки (1–64 символа).",
-        "description": "Отправьте новое сообщение-описание (текст, фото и т.д.) — оно полностью заменит старое.",
+        "title": (
+            "Введите новый текст кнопки (1–64 символа). "
+            "Премиум-кастомные эмодзи в подписи кнопки Telegram не поддерживает — "
+            "используйте обычный текст или эмодзи из стандартного набора."
+        ),
+        "description": (
+            "Отправьте новое сообщение-описание (текст, фото и т.д.) — оно полностью заменит старое. "
+            "Кастомные эмодзи в описании сохраняются; для отправки пользователям нужна Premium у владельца бота."
+        ),
         "event_date": "Введите новую дату в формате `ДД.ММ.ГГГГ` (конец этого дня — затем карточка удалится).",
     }
     await callback.message.answer("✏️ " + prompts.get(callback_data.field, "Введите новое значение."), parse_mode="HTML")

@@ -32,11 +32,28 @@ def _migrate_events_detail_json(sync_conn) -> None:
         logger.exception("Миграция events.detail_json не выполнена")
 
 
+def _migrate_users_city(sync_conn) -> None:
+    """Добавляет колонку city в users/admin_user_archive на существующих БД."""
+    try:
+        insp = inspect(sync_conn)
+        if insp.has_table("users"):
+            cols = {c["name"] for c in insp.get_columns("users")}
+            if "city" not in cols:
+                sync_conn.execute(text("ALTER TABLE users ADD COLUMN city VARCHAR"))
+        if insp.has_table("admin_user_archive"):
+            cols = {c["name"] for c in insp.get_columns("admin_user_archive")}
+            if "city" not in cols:
+                sync_conn.execute(text("ALTER TABLE admin_user_archive ADD COLUMN city VARCHAR"))
+    except Exception:
+        logger.exception("Миграция city в users/admin_user_archive не выполнена")
+
+
 async def init_database() -> None:
     """Создаёт таблицы БД, если их ещё нет. Безопасно вызывать при каждом запуске."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_migrate_events_detail_json)
+        await conn.run_sync(_migrate_users_city)
     logger.info("База данных: таблицы проверены/созданы")
 
 

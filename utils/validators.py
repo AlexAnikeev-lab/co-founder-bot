@@ -171,6 +171,14 @@ def validate_single_quality(text: str) -> bool:
     return 2 <= len(t) <= 40
 
 
+def validate_city(text: str) -> bool:
+    """Валидация города (2–40 символов)."""
+    if not text or not text.strip():
+        return False
+    t = text.strip()
+    return 2 <= len(t) <= 40
+
+
 def parse_event_datetime(text: str) -> Optional[datetime]:
     """
     Парсит дату и время мероприятия.

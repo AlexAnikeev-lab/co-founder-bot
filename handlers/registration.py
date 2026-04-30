@@ -44,6 +44,7 @@ from utils.validators import (
     validate_age,
     validate_name,
     validate_photo,
+    validate_city,
     validate_short_description,
     validate_full_description,
     validate_single_quality,
@@ -549,32 +550,32 @@ async def process_photo(message: Message, state: FSMContext) -> None:
 
         await state.update_data(photo_id=photo_id)
 
-        q1_text = t(lang, "quality_1_request") + t(lang, "reg_skip_hint")
+        city_text = t(lang, "city_request") + t(lang, "reg_skip_hint")
         mid2 = await show_registration_step(
-            message.bot, message.chat.id, last_msg_id, "quality_1",
-            q1_text, get_skip_and_cancel_keyboard(lang), lang=lang,
+            message.bot, message.chat.id, last_msg_id, "city",
+            city_text, get_skip_and_cancel_keyboard(lang), lang=lang,
         )
         if mid2 is not None:
-            await state.update_data(last_bot_message_id=mid2, quality_step_message_ids=[mid2])
+            await state.update_data(last_bot_message_id=mid2)
             protect_message(message.chat.id, mid2)
         elif last_msg_id:
             try:
                 await message.bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=last_msg_id,
-                    text=q1_text,
+                    text=city_text,
                     reply_markup=get_skip_and_cancel_keyboard(lang),
                 )
             except Exception:
-                sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard(lang))
-                await state.update_data(last_bot_message_id=sent.message_id, quality_step_message_ids=[sent.message_id])
+                sent = await message.answer(city_text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(last_bot_message_id=sent.message_id)
                 protect_message(message.chat.id, sent.message_id)
         else:
-            sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard(lang))
-            await state.update_data(last_bot_message_id=sent.message_id, quality_step_message_ids=[sent.message_id])
+            sent = await message.answer(city_text, reply_markup=get_skip_and_cancel_keyboard(lang))
+            await state.update_data(last_bot_message_id=sent.message_id)
             protect_message(message.chat.id, sent.message_id)
 
-        await state.set_state(RegistrationStates.waiting_for_quality_1)
+        await state.set_state(RegistrationStates.waiting_for_city)
 
     except Exception as e:
         logger.error(f"Ошибка в process_photo: {e}", exc_info=True)
@@ -614,6 +615,71 @@ async def process_photo_invalid(message: Message, state: FSMContext) -> None:
                 )
             except Exception:
                 pass
+
+
+@router.message(RegistrationStates.waiting_for_city)
+async def process_city(message: Message, state: FSMContext) -> None:
+    """Обработка города перед блоком сильных качеств."""
+    try:
+        data = await state.get_data()
+        last_msg_id = data.get("last_bot_message_id")
+        lang = data.get("language", "ru")
+
+        if not validate_city(message.text):
+            err = (
+                ("❌ Укажи город от 2 до 40 символов." if lang == "ru" else "❌ Enter your city (2–40 characters).")
+                + "\n\n"
+                + t(lang, "city_request")
+            )
+            if last_msg_id:
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=last_msg_id,
+                        text=err,
+                        reply_markup=get_skip_and_cancel_keyboard(lang),
+                    )
+                except Exception:
+                    sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(last_bot_message_id=sent.message_id)
+            else:
+                sent = await message.answer(err, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(last_bot_message_id=sent.message_id)
+            return
+
+        if text_contains_emoji(message.text):
+            await message.answer(t(lang, "city_no_emoji_in_text"))
+            return
+
+        await state.update_data(city=(message.text or "").strip())
+        q1_text = t(lang, "quality_1_request") + t(lang, "reg_skip_hint")
+        mid2 = await show_registration_step(
+            message.bot, message.chat.id, last_msg_id, "quality_1",
+            q1_text, get_skip_and_cancel_keyboard(lang), lang=lang,
+        )
+        if mid2 is not None:
+            await state.update_data(last_bot_message_id=mid2, quality_step_message_ids=[mid2])
+            protect_message(message.chat.id, mid2)
+        elif last_msg_id:
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=last_msg_id,
+                    text=q1_text,
+                    reply_markup=get_skip_and_cancel_keyboard(lang),
+                )
+            except Exception:
+                sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                await state.update_data(last_bot_message_id=sent.message_id, quality_step_message_ids=[sent.message_id])
+                protect_message(message.chat.id, sent.message_id)
+        else:
+            sent = await message.answer(q1_text, reply_markup=get_skip_and_cancel_keyboard(lang))
+            await state.update_data(last_bot_message_id=sent.message_id, quality_step_message_ids=[sent.message_id])
+            protect_message(message.chat.id, sent.message_id)
+        await state.set_state(RegistrationStates.waiting_for_quality_1)
+    except Exception as e:
+        logger.error(f"Ошибка в process_city: {e}", exc_info=True)
+        await handle_error(None, e, "process_city")
 
 
 @router.message(RegistrationStates.waiting_for_short_description)
@@ -855,6 +921,7 @@ async def _complete_registration(
             photo_id=data.get("photo_id"),
             short_description=data.get("short_description"),
             full_description=data.get("full_description"),
+            city=data.get("city"),
             qualities=qualities,
             is_registered=True,
             language=data.get("language", "ru"),
@@ -955,6 +1022,24 @@ async def reg_skip(
                 await state.update_data(last_bot_message_id=mid2, quality_step_message_ids=mids)
                 protect_message(msg.chat.id, mid2)
             await state.set_state(RegistrationStates.waiting_for_quality_2)
+            return
+        if current == RegistrationStates.waiting_for_city.state:
+            await state.update_data(city=None)
+            text = t(lang, "quality_1_request") + t(lang, "reg_skip_hint")
+            mid2 = await show_registration_step(
+                bot, msg.chat.id, last_msg_id, "quality_1", text, get_skip_and_cancel_keyboard(lang), lang=lang
+            )
+            if mid2 is None:
+                try:
+                    await msg.edit_text(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                except Exception:
+                    sent = await msg.answer(text, reply_markup=get_skip_and_cancel_keyboard(lang))
+                    await state.update_data(last_bot_message_id=sent.message_id, quality_step_message_ids=[sent.message_id])
+                    protect_message(msg.chat.id, sent.message_id)
+            else:
+                await state.update_data(last_bot_message_id=mid2, quality_step_message_ids=[mid2])
+                protect_message(msg.chat.id, mid2)
+            await state.set_state(RegistrationStates.waiting_for_quality_1)
             return
         if current == RegistrationStates.waiting_for_quality_1_emoji.state:
             await state.update_data(quality_1_emoji="•")

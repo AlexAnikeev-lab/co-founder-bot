@@ -21,16 +21,19 @@ def _translate_sync_cached(text: str, target_lang: str) -> str:
 
 async def translate_text_for_language(text: Optional[str], lang: str) -> Optional[str]:
     """
-    Переводит текст только если язык интерфейса — английский.
+    Переводит текст под язык интерфейса пользователя.
+    Поддерживается двусторонний перевод для ru/en:
+    - интерфейс en -> перевод в en
+    - интерфейс ru -> перевод в ru
     Для других языков возвращает исходный текст.
     """
     if text is None:
         return None
     if not text.strip():
         return text
-    if lang != "en":
+    if lang not in {"ru", "en"}:
         return text
-    return await asyncio.to_thread(_translate_sync_cached, text, "en")
+    return await asyncio.to_thread(_translate_sync_cached, text, lang)
 
 
 async def translate_qualities_for_language(qualities_raw: Optional[str], lang: str) -> Optional[str]:
@@ -41,7 +44,7 @@ async def translate_qualities_for_language(qualities_raw: Optional[str], lang: s
     """
     if qualities_raw is None:
         return None
-    if not qualities_raw.strip() or lang != "en":
+    if not qualities_raw.strip() or lang not in {"ru", "en"}:
         return qualities_raw
 
     lines = [line.strip() for line in qualities_raw.split("\n") if line.strip()]

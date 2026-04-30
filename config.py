@@ -21,6 +21,7 @@ REGISTRATION_PHOTOS: dict[str, str] = {
     "telegram": "66.png",
     "name": "67.png",
     "photo": "68.png",
+    "city": "gorod.png",
     "quality_1": "69.png",
     "quality_2": "70.png",
     "quality_3": "71.png",
@@ -44,6 +45,7 @@ REGISTRATION_PHOTOS_EN: dict[str, str] = {
     "telegram": "71 (1).png",        # номер телефона
     "name": "73 (1).png",            # имя
     "photo": "75 (1).png",           # фото
+    "city": "city.png",              # город
     "quality_1": "77.png",           # сильная сторона 1
     "quality_2": "79.png",           # сильная сторона 2
     "quality_3": "81.png",           # сильная сторона 3

@@ -19,6 +19,7 @@ class AdminUserArchive(Base):
     username: Mapped[Optional[str]] = mapped_column(default=None)
     phone: Mapped[Optional[str]] = mapped_column(default=None)
     name: Mapped[Optional[str]] = mapped_column(default=None)
+    city: Mapped[Optional[str]] = mapped_column(default=None)
     age: Mapped[Optional[int]] = mapped_column(default=None)
     photo_id: Mapped[Optional[str]] = mapped_column(default=None)
     short_description: Mapped[Optional[str]] = mapped_column(default=None)
@@ -39,6 +40,7 @@ class AdminArchiveRepository:
             username=user.username,
             phone=user.phone,
             name=user.name,
+            city=getattr(user, "city", None),
             age=user.age,
             photo_id=user.photo_id,
             short_description=user.short_description,
