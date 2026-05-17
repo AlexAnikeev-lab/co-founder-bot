@@ -35,6 +35,7 @@ from utils.event_detail_payload import (
     legacy_payload_from_event,
     send_event_detail_message,
 )
+from utils.telegram_media import answer_photo_safe
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -108,15 +109,17 @@ async def _show_events_list(
 
     async def _send_list_message(msg: Message) -> Message:
         if cover_file_id:
-            return await msg.answer_photo(
-                photo=cover_file_id,
+            return await answer_photo_safe(
+                msg,
+                cover_file_id,
                 caption=text,
                 reply_markup=kb,
                 parse_mode="HTML",
             )
         if cover_path:
-            return await msg.answer_photo(
-                photo=FSInputFile(cover_path),
+            return await answer_photo_safe(
+                msg,
+                FSInputFile(cover_path),
                 caption=text,
                 reply_markup=kb,
                 parse_mode="HTML",

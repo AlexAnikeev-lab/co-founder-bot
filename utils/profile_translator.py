@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from functools import lru_cache
 from typing import Optional
 
@@ -7,13 +8,36 @@ from deep_translator import GoogleTranslator
 
 logger = logging.getLogger(__name__)
 
+_GUILLEMET_RE = re.compile(r"«[^»]*»")
+
+
+def _protect_guillemets(text: str) -> tuple[str, list[str]]:
+    """Заменяет фрагменты «…» плейсхолдерами, чтобы не переводить имена/названия."""
+    protected: list[str] = []
+
+    def repl(match: re.Match) -> str:
+        protected.append(match.group(0))
+        return f"⟦{len(protected) - 1}⟧"
+
+    return _GUILLEMET_RE.sub(repl, text), protected
+
+
+def _restore_guillemets(text: str, protected: list[str]) -> str:
+    for i, fragment in enumerate(protected):
+        text = text.replace(f"⟦{i}⟧", fragment)
+    return text
+
 
 @lru_cache(maxsize=4096)
 def _translate_sync_cached(text: str, target_lang: str) -> str:
     """Синхронный перевод текста с кэшированием."""
     try:
-        translated = GoogleTranslator(source="auto", target=target_lang).translate(text)
-        return translated.strip() if isinstance(translated, str) and translated.strip() else text
+        prepared, protected = _protect_guillemets(text)
+        translated = GoogleTranslator(source="auto", target=target_lang).translate(prepared)
+        if not isinstance(translated, str) or not translated.strip():
+            return text
+        result = _restore_guillemets(translated.strip(), protected)
+        return result
     except Exception as exc:
         logger.warning("Не удалось перевести текст в %s: %s", target_lang, exc)
         return text
@@ -25,7 +49,7 @@ async def translate_text_for_language(text: Optional[str], lang: str) -> Optiona
     Поддерживается двусторонний перевод для ru/en:
     - интерфейс en -> перевод в en
     - интерфейс ru -> перевод в ru
-    Для других языков возвращает исходный текст.
+    Фрагменты в «ёлочках» не переводятся.
     """
     if text is None:
         return None

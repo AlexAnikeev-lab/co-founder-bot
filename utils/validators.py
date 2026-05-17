@@ -68,24 +68,31 @@ def age_from_birth_date(birth: date) -> int:
     return age
 
 
-def validate_age(age_str: str) -> Optional[int]:
-    """Валидация возраста: число 1–120 или дата рождения (дд.мм.гггг / 31 июля 2009 и т.д.)."""
+def parse_age_input(age_str: str) -> Optional[tuple[int, Optional[date]]]:
+    """
+    Возраст из ввода: число 1–120 или дата рождения.
+    Возвращает (возраст, дата_рождения или None если введено только число).
+    """
     s = (age_str or "").strip()
-    # Сначала пробуем как число (как раньше)
     try:
         age = int(s)
         if 1 <= age <= 120:
-            return age
+            return age, None
     except ValueError:
         pass
-    # Пробуем как дату рождения
     birth = parse_birth_date(s)
     if birth is None:
         return None
     age = age_from_birth_date(birth)
     if 1 <= age <= 120:
-        return age
+        return age, birth
     return None
+
+
+def validate_age(age_str: str) -> Optional[int]:
+    """Валидация возраста: число 1–120 или дата рождения (дд.мм.гггг / 31 июля 2009 и т.д.)."""
+    parsed = parse_age_input(age_str)
+    return parsed[0] if parsed else None
 
 
 def validate_name(name: str) -> bool:

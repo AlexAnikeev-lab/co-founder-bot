@@ -158,6 +158,63 @@ def legacy_payload_from_event(
     }
 
 
+async def _send_text_payload(
+    bot: Bot,
+    chat_id: int,
+    payload: dict[str, Any],
+    *,
+    reply_markup: InlineKeyboardMarkup | None = None,
+):
+    text = payload.get("text") or ""
+    pm = payload.get("parse_mode")
+    entities = _load_entities(payload.get("entities"))
+    if pm == "HTML":
+        return await bot.send_message(
+            chat_id, text, parse_mode="HTML", reply_markup=reply_markup
+        )
+    try:
+        return await bot.send_message(
+            chat_id,
+            text,
+            entities=entities,
+            reply_markup=reply_markup,
+            parse_mode=None,
+        )
+    except Exception as exc:
+        logger.warning("send_message с entities не удался, fallback на plain text: %s", exc)
+        return await bot.send_message(
+            chat_id, text or plain_text_preview_from_payload(payload), reply_markup=reply_markup
+        )
+
+
+async def _send_media_payload(
+    bot: Bot,
+    chat_id: int,
+    payload: dict[str, Any],
+    *,
+    send_fn,
+    file_kw: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+):
+    entities = _load_entities(payload.get("entities"))
+    caption = payload.get("caption") or ""
+    kwargs: dict[str, Any] = {
+        file_kw: payload["file_id"],
+        "caption": caption,
+        "caption_entities": entities,
+        "reply_markup": reply_markup,
+        "parse_mode": None,
+    }
+    if file_kw in ("photo", "video", "animation"):
+        kwargs["has_media_spoiler"] = bool(payload.get("has_media_spoiler"))
+    try:
+        return await send_fn(chat_id, **kwargs)
+    except Exception as exc:
+        logger.warning("Отправка медиа мероприятия не удалась (%s), fallback на текст: %s", file_kw, exc)
+        fallback = caption.strip() or plain_text_preview_from_payload(payload)
+        return await bot.send_message(chat_id, fallback or "[мероприятие]", reply_markup=reply_markup)
+
+
 async def send_event_detail_message(
     bot: Bot,
     chat_id: int,
@@ -167,68 +224,35 @@ async def send_event_detail_message(
 ):
     """
     Отправляет сохранённое описание. Возвращает объект Message.
-    Для контента с entities явно parse_mode=None, чтобы не ломать разметку из entities.
+    При ошибке file_id/entities — текстовый fallback, чтобы карточка открывалась.
     """
     kind = payload.get("kind")
-    pm = payload.get("parse_mode")
     if kind == "text":
-        text = payload.get("text") or ""
-        entities = _load_entities(payload.get("entities"))
-        if pm == "HTML":
-            return await bot.send_message(
-                chat_id,
-                text,
-                parse_mode="HTML",
-                reply_markup=reply_markup,
-            )
-        return await bot.send_message(
-            chat_id,
-            text,
-            entities=entities,
-            reply_markup=reply_markup,
-            parse_mode=None,
-        )
+        return await _send_text_payload(bot, chat_id, payload, reply_markup=reply_markup)
     if kind == "photo":
-        entities = _load_entities(payload.get("entities"))
-        return await bot.send_photo(
-            chat_id,
-            photo=payload["file_id"],
-            caption=payload.get("caption") or "",
-            caption_entities=entities,
-            has_media_spoiler=bool(payload.get("has_media_spoiler")),
-            reply_markup=reply_markup,
-            parse_mode=None,
+        return await _send_media_payload(
+            bot, chat_id, payload, send_fn=bot.send_photo, file_kw="photo", reply_markup=reply_markup
         )
     if kind == "video":
-        entities = _load_entities(payload.get("entities"))
-        return await bot.send_video(
-            chat_id,
-            video=payload["file_id"],
-            caption=payload.get("caption") or "",
-            caption_entities=entities,
-            has_media_spoiler=bool(payload.get("has_media_spoiler")),
-            reply_markup=reply_markup,
-            parse_mode=None,
+        return await _send_media_payload(
+            bot, chat_id, payload, send_fn=bot.send_video, file_kw="video", reply_markup=reply_markup
         )
     if kind == "animation":
-        entities = _load_entities(payload.get("entities"))
-        return await bot.send_animation(
+        return await _send_media_payload(
+            bot,
             chat_id,
-            animation=payload["file_id"],
-            caption=payload.get("caption") or "",
-            caption_entities=entities,
-            has_media_spoiler=bool(payload.get("has_media_spoiler")),
+            payload,
+            send_fn=bot.send_animation,
+            file_kw="animation",
             reply_markup=reply_markup,
-            parse_mode=None,
         )
     if kind == "document":
-        entities = _load_entities(payload.get("entities"))
-        return await bot.send_document(
+        return await _send_media_payload(
+            bot,
             chat_id,
-            document=payload["file_id"],
-            caption=payload.get("caption") or "",
-            caption_entities=entities,
+            payload,
+            send_fn=bot.send_document,
+            file_kw="document",
             reply_markup=reply_markup,
-            parse_mode=None,
         )
     raise ValueError(f"Неизвестный kind описания мероприятия: {kind}")

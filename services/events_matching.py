@@ -120,7 +120,8 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
     """
     Возвращает количество пользователей, которым отправлено уведомление (по 2 на пару).
     """
-    from handlers.swipe import format_user_profile  # локально, чтобы не создавать циклические импорты при старте
+    from handlers.swipe import build_translated_profile_text
+    from utils.telegram_media import bot_send_profile_card
     from keyboards.events import get_event_pair_profile_keyboard
     from texts.i18n import t
 
@@ -152,11 +153,8 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
             )
             await bot.send_message(chat_id=a.telegram_id, text=intro_a, parse_mode="HTML")
 
-            profile_text_b = format_user_profile(
-                b,
-                compatibility=p.score,
-                expanded=False,
-                lang=lang_a,
+            profile_text_b = await build_translated_profile_text(
+                b, lang_a, compatibility=p.score, expanded=False
             )
             kb_a = get_event_pair_profile_keyboard(
                 lang=lang_a,
@@ -164,12 +162,12 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
                 dm_link=_dm_link(b),
             )
             if b.photo_id and len(profile_text_b) <= 1024:
-                await bot.send_photo(
-                    chat_id=a.telegram_id,
-                    photo=b.photo_id,
-                    caption=profile_text_b,
+                await bot_send_profile_card(
+                    bot,
+                    a.telegram_id,
+                    photo_id=b.photo_id,
+                    text=profile_text_b,
                     reply_markup=kb_a,
-                    parse_mode="HTML",
                 )
             else:
                 await bot.send_message(
@@ -194,11 +192,8 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
             )
             await bot.send_message(chat_id=b.telegram_id, text=intro_b, parse_mode="HTML")
 
-            profile_text_a = format_user_profile(
-                a,
-                compatibility=p.score,
-                expanded=False,
-                lang=lang_b,
+            profile_text_a = await build_translated_profile_text(
+                a, lang_b, compatibility=p.score, expanded=False
             )
             kb_b = get_event_pair_profile_keyboard(
                 lang=lang_b,
@@ -206,12 +201,12 @@ async def notify_pairs_for_event(bot: Bot, session: AsyncSession, event: Event) 
                 dm_link=_dm_link(a),
             )
             if a.photo_id and len(profile_text_a) <= 1024:
-                await bot.send_photo(
-                    chat_id=b.telegram_id,
-                    photo=a.photo_id,
-                    caption=profile_text_a,
+                await bot_send_profile_card(
+                    bot,
+                    b.telegram_id,
+                    photo_id=a.photo_id,
+                    text=profile_text_a,
                     reply_markup=kb_b,
-                    parse_mode="HTML",
                 )
             else:
                 await bot.send_message(

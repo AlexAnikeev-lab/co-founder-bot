@@ -58,8 +58,10 @@ def get_profile_keyboard(is_minor: bool = False, lang: str = "ru") -> InlineKeyb
 
 def get_people_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     """Меню раздела Люди (язык: ru/en)."""
+    from keyboards.common import get_back_button
     builder = InlineKeyboardBuilder()
     builder.add(InlineKeyboardButton(text=t(lang, "people_favorites"), callback_data="favorites"))
     builder.add(InlineKeyboardButton(text=t(lang, "people_matches"), callback_data="matches"))
+    builder.add(get_back_button("profile", lang))
     builder.adjust(1)
     return builder.as_markup()

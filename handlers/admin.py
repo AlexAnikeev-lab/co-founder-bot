@@ -1004,48 +1004,65 @@ async def admin_users_premium_matches_page(
 
 
 def _format_admin_user_view(record, user) -> str:
-    """Текст карточки пользователя для админа: архивные данные + живой статус и контакты."""
-    # Берём максимум информации из архива, дополняем живыми данными пользователя.
+    """Текст карточки пользователя для админа: контакты, статус и полная анкета."""
+    import html
+    from utils.user_display import format_age_label, get_display_age
+
+    live = user
     telegram_id = (
-        getattr(record, "telegram_id", None)
-        or getattr(user, "telegram_id", None)
+        getattr(live, "telegram_id", None)
+        or getattr(record, "telegram_id", None)
         or "—"
     )
-    name = (
-        (getattr(record, "name", None) or "") or (getattr(user, "name", None) or "") or "—"
-    )
-    username = (
-        getattr(record, "username", None)
-        or getattr(user, "username", None)
-        or ""
-    )
-    phone = (
-        getattr(record, "phone", None)
-        or getattr(user, "phone", None)
-        or ""
-    )
-    age = getattr(record, "age", None) or getattr(user, "age", None) or "—"
+    name = (getattr(live, "name", None) or getattr(record, "name", None) or "—")
+    username = getattr(live, "username", None) or getattr(record, "username", None) or ""
+    phone = getattr(live, "phone", None) or getattr(record, "phone", None) or ""
+    city = getattr(live, "city", None) or getattr(record, "city", None) or ""
     archived_at = getattr(record, "archived_at", None)
+
+    display_age = get_display_age(live) if live else getattr(record, "age", None)
+    age_str = format_age_label(display_age, "ru") if display_age is not None else "—"
 
     lines = [
         "👤 <b>Пользователь</b>",
         "",
         f"📱 <b>Telegram ID:</b> <code>{telegram_id}</code>",
-        f"👤 <b>Имя (анкета):</b> {name}",
+        f"👤 <b>Имя:</b> {html.escape(str(name))}",
         (
             f"📧 <b>Username:</b> @{username}"
-            if (username and username.strip())
+            if (username and str(username).strip())
             else "📧 <b>Username:</b> —"
         ),
         f"📞 <b>Телефон:</b> {phone or '—'}",
-        f"🎂 <b>Возраст:</b> {age}",
-        f"🔒 <b>Бан:</b> {(user.ban_status or 'none') if user else '—'}",
-        f"💎 <b>Премиум:</b> {'активен' if (user and getattr(user, 'subscription_active', False)) else 'нет'}",
+        f"🎂 <b>Возраст:</b> {age_str}",
+        f"🏙 <b>Город:</b> {html.escape(city) if city else '—'}",
+        f"🔒 <b>Бан:</b> {(live.ban_status or 'none') if live else '—'}",
+        f"💎 <b>Премиум:</b> {'активен' if (live and getattr(live, 'subscription_active', False)) else 'нет'}",
     ]
     if archived_at:
-        lines.append(
-            f"📅 <b>Запись в архиве:</b> {archived_at.strftime('%d.%m.%Y %H:%M')}"
-        )
+        lines.append(f"📅 <b>Архив:</b> {archived_at.strftime('%d.%m.%Y %H:%M')}")
+
+    short_desc = getattr(live, "short_description", None) or getattr(record, "short_description", None)
+    full_desc = getattr(live, "full_description", None) or getattr(record, "full_description", None)
+    qualities = getattr(live, "qualities", None) or getattr(record, "qualities", None)
+
+    lines.append("")
+    lines.append(f"📝 <b>Краткое описание:</b>\n{html.escape(short_desc) if short_desc else '—'}")
+    lines.append("")
+    if qualities:
+        lines.append("⭐ <b>Качества:</b>")
+        for ln in str(qualities).split("\n"):
+            ln = ln.strip()
+            if not ln:
+                continue
+            if "|" in ln:
+                em, txt = ln.split("|", 1)
+                lines.append(f"{em.strip()} {html.escape(txt.strip())}")
+            else:
+                lines.append(html.escape(ln))
+        lines.append("")
+    lines.append(f"📄 <b>Полное описание:</b>\n{html.escape(full_desc) if full_desc else '—'}")
+
     return "\n".join(lines).replace("@None", "—")
 
 
@@ -1268,21 +1285,41 @@ async def admin_user_profile_view(callback: CallbackQuery, state: FSMContext) ->
         await callback.answer("Ошибка", show_alert=True)
         return
     await callback.answer()
-    from handlers.swipe import format_user_profile
+    from handlers.swipe import build_translated_profile_text, _get_user_profile
+    from repositories.test_repository import TestResultRepository
+    from services.compatibility_service import CompatibilityService
+
+    admin_id = callback.from_user.id
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, telegram_id)
         if not user:
             await callback.message.answer("❌ Пользователь не найден.")
             return
-        _lang = getattr(user, "language", None) or "ru"
-        profile_text = format_user_profile(user, compatibility=None, lang=_lang)
-        if user.photo_id:
-            await callback.message.answer_photo(
-                photo=user.photo_id,
-                caption=profile_text,
-            )
-        else:
-            await callback.message.answer(profile_text)
+        viewer_lang = "ru"
+        admin_user = await UserRepository.get_by_telegram_id(session, admin_id)
+        if admin_user:
+            viewer_lang = getattr(admin_user, "language", None) or "ru"
+
+        compatibility = None
+        tr_viewer = await TestResultRepository.get_by_user_id(session, admin_id)
+        tr_shown = await TestResultRepository.get_by_user_id(session, telegram_id)
+        if tr_viewer and tr_shown and tr_viewer.main_test_completed and tr_shown.main_test_completed:
+            pv = _get_user_profile(tr_viewer)
+            pl = _get_user_profile(tr_shown)
+            if pv and pl:
+                compatibility, _ = CompatibilityService.calculate_compatibility_detailed(pv, pl)
+
+        from utils.telegram_media import send_profile_card
+
+        profile_text = await build_translated_profile_text(
+            user, viewer_lang, compatibility, expanded=False
+        )
+        await send_profile_card(
+            callback.message,
+            photo_id=user.photo_id,
+            text=profile_text,
+            parse_mode="HTML",
+        )
         break
 
 

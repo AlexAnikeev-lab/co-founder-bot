@@ -32,6 +32,18 @@ def _migrate_events_detail_json(sync_conn) -> None:
         logger.exception("Миграция events.detail_json не выполнена")
 
 
+def _migrate_users_birth_date(sync_conn) -> None:
+    """Добавляет колонку birth_date в users."""
+    try:
+        insp = inspect(sync_conn)
+        if insp.has_table("users"):
+            cols = {c["name"] for c in insp.get_columns("users")}
+            if "birth_date" not in cols:
+                sync_conn.execute(text("ALTER TABLE users ADD COLUMN birth_date VARCHAR"))
+    except Exception:
+        logger.exception("Миграция birth_date в users не выполнена")
+
+
 def _migrate_users_city(sync_conn) -> None:
     """Добавляет колонку city в users/admin_user_archive на существующих БД."""
     try:
@@ -53,6 +65,7 @@ async def init_database() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_migrate_events_detail_json)
+        await conn.run_sync(_migrate_users_birth_date)
         await conn.run_sync(_migrate_users_city)
     logger.info("База данных: таблицы проверены/созданы")
 

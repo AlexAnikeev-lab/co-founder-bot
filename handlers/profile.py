@@ -16,6 +16,8 @@ from repositories.user_repository import UserRepository
 from repositories.test_repository import TestResultRepository
 from repositories.database import get_session
 from utils.errors import handle_error
+from utils.telegram_media import edit_message_media_safe, send_profile_card
+from utils.user_display import format_age_label, get_display_age
 from utils.validators import (
     validate_name,
     validate_photo,
@@ -58,16 +60,18 @@ async def send_profile_view(
             return
         lang = getattr(user, "language", None) or "ru"
         ns = t(lang, "not_specified")
+        display_age = get_display_age(user)
+        age_label = format_age_label(display_age, lang) if display_age is not None else ns
         profile_text = (
             f"{t(lang, 'profile_section')}\n\n"
             f"<b>{t(lang, 'profile_name')}:</b> {user.name or ns}\n"
-            f"<b>{t(lang, 'profile_age')}:</b> {user.age or ns}\n\n"
+            f"<b>{t(lang, 'profile_age')}:</b> {age_label}\n\n"
         )
         if getattr(user, "city", None):
             profile_text = (
                 f"{t(lang, 'profile_section')}\n\n"
                 f"<b>{t(lang, 'profile_name')}:</b> {user.name or ns}\n"
-                f"<b>{t(lang, 'profile_age')}:</b> {user.age or ns}\n"
+                f"<b>{t(lang, 'profile_age')}:</b> {age_label}\n"
                 f"<b>{t(lang, 'profile_city')}:</b> {html.escape(user.city)}\n\n"
             )
         if user.short_description:
@@ -89,26 +93,25 @@ async def send_profile_view(
             # Без фото: редактируем текст и кнопки.
             edited = False
             if user.photo_id:
-                try:
-                    await message.bot.edit_message_media(
-                        chat_id=message.chat.id,
-                        message_id=edit_message_id,
-                        media=InputMediaPhoto(media=user.photo_id, caption=profile_text),
-                        reply_markup=kb,
-                    )
+                edited = await edit_message_media_safe(
+                    message.bot,
+                    message.chat.id,
+                    edit_message_id,
+                    user.photo_id,
+                    caption=profile_text,
+                    reply_markup=kb,
+                )
+                if edited:
                     await state.update_data(last_bot_message_id=edit_message_id)
-                    edited = True
-                except Exception:
-                    pass
-                if not edited:
-                    # Сообщение было текстовым — в Telegram нельзя добавить фото через edit, удаляем и шлём с фото
+                else:
                     try:
                         await message.bot.delete_message(chat_id=message.chat.id, message_id=edit_message_id)
                     except Exception:
                         pass
-                    msg = await message.answer_photo(
-                        photo=user.photo_id,
-                        caption=profile_text,
+                    msg = await send_profile_card(
+                        message,
+                        photo_id=user.photo_id,
+                        text=profile_text,
                         reply_markup=kb,
                     )
                     await state.update_data(last_bot_message_id=msg.message_id)
@@ -138,14 +141,12 @@ async def send_profile_view(
                         msg = await message.answer(profile_text, reply_markup=kb)
                         await state.update_data(last_bot_message_id=msg.message_id)
         else:
-            if user.photo_id:
-                msg = await message.answer_photo(
-                    photo=user.photo_id,
-                    caption=profile_text,
-                    reply_markup=kb,
-                )
-            else:
-                msg = await message.answer(profile_text, reply_markup=kb)
+            msg = await send_profile_card(
+                message,
+                photo_id=user.photo_id,
+                text=profile_text,
+                reply_markup=kb,
+            )
             await state.update_data(last_bot_message_id=msg.message_id)
             await message.answer(
                 t(lang, "choose_section"),
@@ -191,9 +192,11 @@ async def show_profile(event, state: FSMContext) -> None:
 
             lang = getattr(user, "language", None) or "ru"
             ns = t(lang, "not_specified")
+            display_age = get_display_age(user)
+            age_label = format_age_label(display_age, lang) if display_age is not None else ns
             profile_text = f"{t(lang, 'profile_section')}\n\n"
             profile_text += f"<b>{t(lang, 'profile_name')}:</b> {user.name or ns}\n"
-            profile_text += f"<b>{t(lang, 'profile_age')}:</b> {user.age or ns}\n\n"
+            profile_text += f"<b>{t(lang, 'profile_age')}:</b> {age_label}\n\n"
             if getattr(user, "city", None):
                 profile_text += f"<b>{t(lang, 'profile_city')}:</b> {html.escape(user.city)}\n\n"
             if user.short_description:
@@ -221,17 +224,12 @@ async def show_profile(event, state: FSMContext) -> None:
                         pass
             await state.update_data(profile_section_message_id=None)
 
-            if user.photo_id:
-                msg = await message.answer_photo(
-                    photo=user.photo_id,
-                    caption=profile_text,
-                    reply_markup=get_profile_keyboard(user.is_minor, lang),
-                )
-            else:
-                msg = await message.answer(
-                    profile_text,
-                    reply_markup=get_profile_keyboard(user.is_minor, lang),
-                )
+            msg = await send_profile_card(
+                message,
+                photo_id=user.photo_id,
+                text=profile_text,
+                reply_markup=get_profile_keyboard(user.is_minor, lang),
+            )
             await state.update_data(last_bot_message_id=msg.message_id)
             sec_msg = await message.answer(t(lang, "choose_section"), reply_markup=get_profile_reply_keyboard(user.is_minor, lang))
             await state.update_data(profile_section_message_id=sec_msg.message_id)
@@ -258,7 +256,7 @@ async def profile_reply_people(message: Message, state: FSMContext) -> None:
                 await bot.delete_message(chat_id=chat_id, message_id=mid)
             except Exception:
                 pass
-    await state.update_data(profile_section_message_id=None, profile_screen="people")
+    await state.update_data(in_profile=True, profile_section_message_id=None, profile_screen="people")
     from keyboards.menu import get_people_keyboard
     lang = "ru"
     async for s in get_session():
@@ -424,7 +422,7 @@ async def profile_set_language(callback: CallbackQuery, state: FSMContext) -> No
 async def show_people(callback: CallbackQuery, state: FSMContext) -> None:
     """Раздел Люди — подменю. Удаляем сообщение «Выберите раздел»."""
     await callback.answer()
-    await state.update_data(profile_screen="people")
+    await state.update_data(in_profile=True, profile_screen="people")
     from keyboards.menu import get_people_keyboard
     data = await state.get_data()
     section_mid = data.get("profile_section_message_id")
@@ -467,10 +465,9 @@ async def _show_favorite_at_index(
     lang: str = "ru",
 ) -> None:
     """Показать анкету из избранного по индексу (редактируем текущее сообщение или отправляем новое)."""
-    from handlers.swipe import format_user_profile
+    from handlers.swipe import build_translated_profile_text, _get_user_profile
     from keyboards.swipe import get_favorites_keyboard
     from services.compatibility_service import CompatibilityService
-    from handlers.swipe import _get_user_profile
 
     if index < 0 or index >= len(favorites_ids):
         return
@@ -490,7 +487,7 @@ async def _show_favorite_at_index(
             pl = _get_user_profile(tr_shown, include_label=True)
             if pv and pl:
                 compatibility, _ = CompatibilityService.calculate_compatibility_detailed(pv, pl)
-        profile_text = format_user_profile(user, compatibility, expanded=False, lang=lang)
+        profile_text = await build_translated_profile_text(user, lang, compatibility, expanded=False)
         total = len(favorites_ids)
         kb = get_favorites_keyboard(uid, index, total, expanded=False, lang=lang)
         new_id = msg.message_id
@@ -505,30 +502,24 @@ async def _show_favorite_at_index(
                     await msg.delete()
                 except Exception:
                     pass
-                if user.photo_id:
-                    sent = await msg.answer_photo(
-                        photo=user.photo_id,
-                        caption=profile_text,
-                        reply_markup=kb,
-                        parse_mode="HTML",
-                    )
-                else:
-                    sent = await msg.answer(profile_text, reply_markup=kb, parse_mode="HTML")
+                sent = await send_profile_card(
+                    msg,
+                    photo_id=user.photo_id,
+                    text=profile_text,
+                    reply_markup=kb,
+                )
                 new_id = sent.message_id
         except Exception:
             try:
                 await msg.delete()
             except Exception:
                 pass
-            if user.photo_id:
-                sent = await msg.answer_photo(
-                    photo=user.photo_id,
-                    caption=profile_text,
-                    reply_markup=kb,
-                    parse_mode="HTML",
-                )
-            else:
-                sent = await msg.answer(profile_text, reply_markup=kb, parse_mode="HTML")
+            sent = await send_profile_card(
+                msg,
+                photo_id=user.photo_id,
+                text=profile_text,
+                reply_markup=kb,
+            )
             new_id = sent.message_id
         await state.update_data(
             in_favorites=True,
@@ -547,7 +538,7 @@ async def show_favorites(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(profile_screen="favorites")
     from keyboards.menu import get_people_keyboard
     from repositories.swipe_repository import SwipeRepository
-    from handlers.swipe import format_user_profile
+    from handlers.swipe import build_translated_profile_text
     from keyboards.swipe import get_favorites_keyboard
 
     user_id = callback.from_user.id
@@ -594,22 +585,19 @@ async def show_favorites(callback: CallbackQuery, state: FSMContext) -> None:
                 pl = _get_user_profile(tr_shown, include_label=True)
                 if pv and pl:
                     compatibility, _ = CompatibilityService.calculate_compatibility_detailed(pv, pl)
-            profile_text = format_user_profile(user, compatibility, expanded=False, lang=lang)
+            profile_text = await build_translated_profile_text(user, lang, compatibility, expanded=False)
             total = len(favorites_ids)
             kb = get_favorites_keyboard(uid, 0, total, expanded=False, lang=lang)
             try:
                 await callback.message.delete()
             except Exception:
                 pass
-            if user.photo_id:
-                sent = await callback.message.answer_photo(
-                    photo=user.photo_id,
-                    caption=profile_text,
-                    reply_markup=kb,
-                    parse_mode="HTML",
-                )
-            else:
-                sent = await callback.message.answer(profile_text, reply_markup=kb, parse_mode="HTML")
+            sent = await send_profile_card(
+                callback.message,
+                photo_id=user.photo_id,
+                text=profile_text,
+                reply_markup=kb,
+            )
             await state.update_data(last_bot_message_id=sent.message_id)
             break
     except Exception as e:
@@ -693,10 +681,9 @@ async def handle_expand_collapse_favorites(callback: CallbackQuery, state: FSMCo
         user = await UserRepository.get_by_telegram_id(session, swiped_user_id)
         if not user:
             return
-        from handlers.swipe import format_user_profile
+        from handlers.swipe import build_translated_profile_text, _get_user_profile
         from keyboards.swipe import get_favorites_keyboard
         from services.compatibility_service import CompatibilityService
-        from handlers.swipe import _get_user_profile
         compatibility = None
         compatibility_explanation = None
         viewer_id = callback.from_user.id
@@ -711,8 +698,12 @@ async def handle_expand_collapse_favorites(callback: CallbackQuery, state: FSMCo
                     compatibility_explanation = CompatibilityService.get_compatibility_explanation(
                         compatibility, details, lang=lang
                     )
-        profile_text = format_user_profile(
-            user, compatibility, expanded=is_expand, compatibility_explanation=compatibility_explanation, lang=lang
+        profile_text = await build_translated_profile_text(
+            user,
+            lang,
+            compatibility,
+            expanded=is_expand,
+            compatibility_explanation=compatibility_explanation,
         )
         total = len(favorites_ids)
         kb = get_favorites_keyboard(swiped_user_id, index, total, expanded=is_expand, lang=lang)

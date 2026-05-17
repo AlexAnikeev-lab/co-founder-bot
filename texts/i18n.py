@@ -69,13 +69,17 @@ T = {
 
 Пример: "Разработчик с опытом в стартапах. Ищу со-основателя для EdTech проекта."
 
-Максимум 180 символов.""",
+Максимум 180 символов.
+
+<i>Названия стартапов и проектов указывай в кавычках «…» — они не будут переводиться.</i>""",
         "full_description_request": """📝 <b>Полное описание</b>
 
 <i>Расскажи подробнее о себе, своем опыте, интересах и целях.
 Что ты хочешь создать? Какие у тебя навыки?</i>
 
-Максимум 500 символов.""",
+Максимум 500 символов.
+
+<i>Названия стартапов и проектов указывай в кавычках «…» — они не будут переводиться.</i>""",
         "quality_1_request": "⭐️ <b>Введи своё первое сильное качество или навык</b>\n\nЭто может быть:\n— <b>личное качество</b> (например: целеустремлённость)\n— <b>навык</b> (например: умею коммуницировать, разбираюсь в SMM)\n— <b>или опыт/результат</b> (например: работал в недвижимости, сделал прибыль $1M+).",
         "quality_2_request": "⭐️ <b>Введи своё второе сильное качество или навык</b>\n\nЭто может быть:\n— <b>личное качество</b> (например: целеустремлённость)\n— <b>навык</b> (например: умею коммуницировать, разбираюсь в SMM)\n— <b>или опыт/результат</b> (например: работал в недвижимости, сделал прибыль $1M+).",
         "quality_3_request": "⭐️ <b>Введи своё третье сильное качество или навык</b>\n\nЭто может быть:\n— <b>личное качество</b> (например: целеустремлённость)\n— <b>навык</b> (например: умею коммуницировать, разбираюсь в SMM)\n— <b>или опыт/результат</b> (например: работал в недвижимости, сделал прибыль $1M+).",
@@ -104,7 +108,8 @@ T = {
         "choose_menu_item": "Выберите пункт меню:",
         "back_from_partners": "Вы вышли из раздела Партнеры. Выберите пункт меню:",
         "partners_title": "🤝 <b>Поиск партнёров</b>",
-        "partners_no_users": "Вы просмотрели всех доступных пользователей.\nПопробуйте позже, когда появятся новые анкеты!",
+        "partners_no_users": "Сейчас нет новых анкет для показа.\nПопробуйте позже, когда появятся новые пользователи!",
+        "partners_cycle_hint": "Вы снова просматриваете анкеты по кругу (кроме лайков и избранного).",
         "partners_intro": "Используйте кнопки ниже для действий с анкетой.",
         "partners_main_test_required": (
             "У тебя не пройден основной тест. Он нужен для подбора партнёров и отображения совместимости.\n\n"
@@ -127,6 +132,11 @@ T = {
         "card_qualities_heading": "Главные качества",
         "card_more": "Подробнее",
         "card_why_compatibility": "🔗 Почему такая совместимость",
+        "profile_translated_note": "Профиль переведён автоматически (исходный язык: {lang_name}).",
+        "lang_name_ru": "русский",
+        "lang_name_en": "английский",
+        "test_current_answer": "✅ Текущий ответ: <b>{answer}</b>. Можно изменить или нажать «Завершить тест».",
+        "guillemets_hint": "\n\n<i>Названия стартапов и проектов указывай в кавычках «…» — они не будут переводиться.</i>",
         "compat_section_tests": "📊 По результатам тестов",
         "compat_section_roles": "👥 Роли в команде",
         "compat_section_penalty": "⚠️ Учтено при расчёте",
@@ -418,13 +428,17 @@ This will be visible in the partners list.</i>
 
 Example: "Developer with startup experience. Looking for a co-founder for an EdTech project."
 
-Max 180 characters.""",
+Max 180 characters.
+
+<i>Put startup and project names in quotes «…» — they won't be translated.</i>""",
         "full_description_request": """📝 <b>Full description</b>
 
 <i>Tell more about yourself, your experience, interests and goals.
 What do you want to build? What are your skills?</i>
 
-Max 500 characters.""",
+Max 500 characters.
+
+<i>Put startup and project names in quotes «…» — they won't be translated.</i>""",
         "quality_1_request": "⭐️ <b>Enter your first strong quality or skill</b>\n\nThis could be:\n— <b>a personal quality</b> (e.g.: determination)\n— <b>a skill</b> (e.g.: I can communicate well, I’m familiar with SMM)\n— <b>or experience/results</b> (e.g.: worked in real estate, made profit $1M+).",
         "quality_2_request": "⭐️ <b>Enter your second strong quality or skill</b>\n\nThis could be:\n— <b>a personal quality</b> (e.g.: determination)\n— <b>a skill</b> (e.g.: I can communicate well, I’m familiar with SMM)\n— <b>or experience/results</b> (e.g.: worked in real estate, made profit $1M+).",
         "quality_3_request": "⭐️ <b>Enter your third strong quality or skill</b>\n\nThis could be:\n— <b>a personal quality</b> (e.g.: determination)\n— <b>a skill</b> (e.g.: I can communicate well, I’m familiar with SMM)\n— <b>or experience/results</b> (e.g.: worked in real estate, made profit $1M+).",
@@ -452,7 +466,8 @@ Max 500 characters.""",
         "choose_menu_item": "Choose a menu item:",
         "back_from_partners": "You left Partners. Choose a menu item:",
         "partners_title": "🤝 <b>Partner search</b>",
-        "partners_no_users": "You've seen all available users.\nTry again later when new profiles appear!",
+        "partners_no_users": "No new profiles to show right now.\nTry again later when new users join!",
+        "partners_cycle_hint": "You're browsing profiles again in a loop (except likes and favorites).",
         "partners_intro": "Use the buttons below to act on the profile.",
         "partners_main_test_required": (
             "You haven't completed the main test. It's needed to match partners and show compatibility.\n\n"
@@ -480,6 +495,11 @@ Max 500 characters.""",
         "card_qualities_heading": "Key strengths",
         "card_more": "More",
         "card_why_compatibility": "🔗 Why this compatibility",
+        "profile_translated_note": "Profile was auto-translated (original language: {lang_name}).",
+        "lang_name_ru": "Russian",
+        "lang_name_en": "English",
+        "test_current_answer": "✅ Current answer: <b>{answer}</b>. You can change it or tap «Finish test».",
+        "guillemets_hint": "\n\n<i>Put startup and project names in quotes «…» — they won't be translated.</i>",
         "compat_section_tests": "📊 Test results",
         "compat_section_roles": "👥 Team roles",
         "compat_section_penalty": "⚠️ Considered in score",

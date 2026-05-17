@@ -33,6 +33,8 @@ from utils.profile_translator import (
     translate_qualities_for_language,
     translate_text_for_language,
 )
+from utils.telegram_media import send_profile_card
+from utils.user_display import format_age_label, get_display_age
 from keyboards.menu import get_main_menu_keyboard
 from keyboards.common import get_back_button
 from texts.i18n import t, text_options
@@ -183,6 +185,7 @@ def format_user_profile(
     short_description_override: Optional[str] = None,
     full_description_override: Optional[str] = None,
     qualities_override: Optional[str] = None,
+    show_translation_note: bool = False,
 ) -> str:
     """
     Форматирование анкеты пользователя для показа.
@@ -204,8 +207,8 @@ def format_user_profile(
         icon = "🔴"
 
     name_part = user.name or t(lang, "card_no_name")
-    years_label = t(lang, "card_years")
-    age_part = f"{user.age} {years_label}" if user.age else ""
+    display_age = get_display_age(user)
+    age_part = format_age_label(display_age, lang) if display_age is not None else ""
     if age_part:
         text_parts.append(f"{icon} {name_part} | {age_part}")
     else:
@@ -249,7 +252,51 @@ def format_user_profile(
         text_parts.append(f"<b>{t(lang, 'card_why_compatibility')}</b>")
         text_parts.append(compatibility_explanation)
 
+    if show_translation_note:
+        author_lang = getattr(user, "language", None) or "ru"
+        if author_lang != lang:
+            lang_name = t(lang, f"lang_name_{author_lang}")
+            text_parts.append("")
+            text_parts.append(f"<i>{t(lang, 'profile_translated_note').format(lang_name=lang_name)}</i>")
+
     return "\n".join(text_parts)
+
+
+def _needs_translation(user: User, viewer_lang: str) -> bool:
+    author_lang = getattr(user, "language", None) or "ru"
+    return author_lang != viewer_lang
+
+
+async def build_translated_profile_text(
+    user: User,
+    viewer_lang: str,
+    compatibility: Optional[int] = None,
+    expanded: bool = False,
+    compatibility_explanation: Optional[str] = None,
+) -> str:
+    """Перевод полей анкеты под язык просмотра и сборка текста карточки."""
+    if _needs_translation(user, viewer_lang):
+        translated_short = await translate_text_for_language(user.short_description, viewer_lang)
+        translated_full = await translate_text_for_language(user.full_description, viewer_lang)
+        translated_qualities = await translate_qualities_for_language(user.qualities, viewer_lang)
+        return format_user_profile(
+            user,
+            compatibility,
+            expanded=expanded,
+            compatibility_explanation=compatibility_explanation,
+            lang=viewer_lang,
+            short_description_override=translated_short,
+            full_description_override=translated_full,
+            qualities_override=translated_qualities,
+            show_translation_note=True,
+        )
+    return format_user_profile(
+        user,
+        compatibility,
+        expanded=expanded,
+        compatibility_explanation=compatibility_explanation,
+        lang=viewer_lang,
+    )
 
 
 # Максимум кандидатов для расчёта совместимости (устраняет N+1 и тяжёлые запросы при 400+ пользователях)
@@ -260,26 +307,38 @@ PREMIUM_LIMIT_MULTIPLIER = 2  # "всё х2" для подписчиков
 async def get_next_user_for_swipe(
     session,
     current_user_id: int,
-    current_user: User
+    current_user: User,
+    last_shown_id: Optional[int] = None,
 ) -> Optional[tuple[User, int]]:
     """
-    Получение следующего пользователя для свайпа с учетом совместимости.
-    Сначала показываем тех, кого ещё не просматривали; когда таких не остаётся — показываем заново дизлайкнутых.
+    Следующая анкета для ленты.
+    1) ещё не свайпнутые;
+    2) повтор: все, кроме лайков и избранного (дизлайк/пропуск снова в ленте);
+    3) повтор: все, кроме избранного (полный круг).
+  На каждом шаге не показываем подряд ту же анкету, если есть другие кандидаты.
     """
-    result = await _get_next_user_with_excluded(
-        session, current_user_id, current_user,
-        excluded_ids=None,  # сначала исключаем всех, на кого уже свайпнули
-    )
-    if result is not None:
-        return result
-    # Все просмотренные закончились — даём второй круг: исключаем только лайки, закладки и пропуски (дизлайкнутых показываем снова)
-    excluded_only_non_dislike = await SwipeRepository.get_swiped_user_ids_with_actions(
-        session, current_user_id, ("like", "bookmark", "skip")
-    )
-    return await _get_next_user_with_excluded(
-        session, current_user_id, current_user,
-        excluded_ids=excluded_only_non_dislike,
-    )
+    exclusion_rounds: list[Optional[tuple[str, ...]]] = [
+        None,
+        ("like", "bookmark"),
+        ("bookmark",),
+    ]
+    for round_actions in exclusion_rounds:
+        if round_actions is None:
+            excluded_ids = None
+        else:
+            excluded_ids = await SwipeRepository.get_swiped_user_ids_with_actions(
+                session, current_user_id, round_actions
+            )
+        result = await _get_next_user_with_excluded(
+            session,
+            current_user_id,
+            current_user,
+            excluded_ids=excluded_ids,
+            skip_user_id=last_shown_id,
+        )
+        if result is not None:
+            return result
+    return None
 
 
 async def _get_likes_left_text(
@@ -303,20 +362,39 @@ async def _get_likes_left_text(
     return t(lang, "likes_no_left_info", limit=limit)
 
 
+def _pick_from_ranked_candidates(
+    ranked: list[tuple[User, int]],
+    skip_user_id: Optional[int],
+) -> Optional[tuple[User, int]]:
+    """Берёт лучшего по совместимости, но не ту же анкету подряд, если есть альтернатива."""
+    if not ranked:
+        return None
+    if skip_user_id is not None and len(ranked) > 1:
+        for user, score in ranked:
+            if user.telegram_id != skip_user_id:
+                return (user, score)
+    return ranked[0]
+
+
 async def _get_next_user_with_excluded(
     session,
     current_user_id: int,
     current_user: User,
     excluded_ids: Optional[list] = None,
+    skip_user_id: Optional[int] = None,
 ) -> Optional[tuple[User, int]]:
     """Следующий пользователь для свайпа, исключая только переданные id (если None — все, на кого уже свайпнули)."""
     test_result = await TestResultRepository.get_by_user_id(session, current_user_id)
     if not test_result or not test_result.main_test_completed:
-        return await _get_any_user(session, current_user_id, excluded_ids=excluded_ids)
+        return await _get_any_user(
+            session, current_user_id, excluded_ids=excluded_ids, skip_user_id=skip_user_id
+        )
 
     current_profile = _get_user_profile(test_result)
     if not current_profile:
-        return await _get_any_user(session, current_user_id, excluded_ids=excluded_ids)
+        return await _get_any_user(
+            session, current_user_id, excluded_ids=excluded_ids, skip_user_id=skip_user_id
+        )
 
     if excluded_ids is None:
         swiped_ids = await SwipeRepository.get_swiped_user_ids(session, current_user_id)
@@ -364,14 +442,14 @@ async def _get_next_user_with_excluded(
         users_with_compatibility.append((user, compatibility))
 
     users_with_compatibility.sort(key=lambda x: x[1], reverse=True)
-    if not users_with_compatibility:
-        return None
-    winner_user, winner_compatibility = users_with_compatibility[0]
-    return (winner_user, winner_compatibility)
+    return _pick_from_ranked_candidates(users_with_compatibility, skip_user_id)
 
 
 async def _get_any_user(
-    session, current_user_id: int, excluded_ids: Optional[list] = None
+    session,
+    current_user_id: int,
+    excluded_ids: Optional[list] = None,
+    skip_user_id: Optional[int] = None,
 ) -> Optional[tuple[User, int]]:
     """Получение любого пользователя без учета совместимости. excluded_ids: если None — исключаем всех, на кого уже свайпнули."""
     if excluded_ids is None:
@@ -380,19 +458,28 @@ async def _get_any_user(
         swiped_ids = list(excluded_ids)
     swiped_ids.append(current_user_id)
 
-    query = select(User).where(
-        and_(
-            User.telegram_id.notin_(swiped_ids),
-            User.is_registered == True,
-            User.is_minor == False,
-            (User.ban_status.is_(None)) | (User.ban_status == "none"),
+    query = (
+        select(User)
+        .where(
+            and_(
+                User.telegram_id.notin_(swiped_ids),
+                User.is_registered == True,
+                User.is_minor == False,
+                (User.ban_status.is_(None)) | (User.ban_status == "none"),
+            )
         )
-    ).limit(1)
+        .limit(SWIPE_CANDIDATES_LIMIT)
+    )
 
     result = await session.execute(query)
-    user = result.scalar_one_or_none()
-
-    return (user, 0) if user else None
+    candidates = list(result.scalars().all())
+    if not candidates:
+        return None
+    if skip_user_id is not None and len(candidates) > 1:
+        for user in candidates:
+            if user.telegram_id != skip_user_id:
+                return (user, 0)
+    return (candidates[0], 0)
 
 
 def _get_dm_link(user: User) -> str:
@@ -452,7 +539,12 @@ async def show_next_profile(
                 if keep_id:
                     protect_message(chat_id, keep_id)
 
-        next_user_data = await get_next_user_for_swipe(session, user_id, current_user)
+        last_shown_id = None
+        if state:
+            last_shown_id = (await state.get_data()).get("current_partner_id")
+        next_user_data = await get_next_user_for_swipe(
+            session, user_id, current_user, last_shown_id=last_shown_id
+        )
 
         if not next_user_data:
             no_users_text = f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_no_users')}"
@@ -497,17 +589,7 @@ async def show_next_profile(
 
         lang = getattr(current_user, "language", None) or "ru"
         has_super_like = getattr(current_user, "subscription_active", False) and not getattr(current_user, "super_like_used", False)
-        translated_short = await translate_text_for_language(next_user.short_description, lang)
-        translated_full = await translate_text_for_language(next_user.full_description, lang)
-        translated_qualities = await translate_qualities_for_language(next_user.qualities, lang)
-        profile_text = format_user_profile(
-            next_user,
-            compatibility,
-            lang=lang,
-            short_description_override=translated_short,
-            full_description_override=translated_full,
-            qualities_override=translated_qualities,
-        )
+        profile_text = await build_translated_profile_text(next_user, lang, compatibility)
         if in_partners:
             swipe_kb = get_swipe_keyboard_expand_only(
                 next_user.telegram_id, expanded=False, from_notification=False, lang=lang
@@ -515,17 +597,12 @@ async def show_next_profile(
         else:
             swipe_kb = get_swipe_keyboard(next_user.telegram_id, lang=lang, has_super_like=has_super_like)
 
-        if next_user.photo_id:
-            sent = await message.answer_photo(
-                photo=next_user.photo_id,
-                caption=profile_text,
-                reply_markup=swipe_kb,
-            )
-        else:
-            sent = await message.answer(
-                profile_text,
-                reply_markup=swipe_kb,
-            )
+        sent = await send_profile_card(
+            message,
+            photo_id=next_user.photo_id,
+            text=profile_text,
+            reply_markup=swipe_kb,
+        )
         if state and in_partners and sent:
             await state.update_data(last_bot_message_id=sent.message_id)
     except Exception as e:
@@ -991,32 +1068,17 @@ async def handle_view_liker(callback: CallbackQuery) -> None:
                     )
                 except Exception:
                     pass
-            translated_short = await translate_text_for_language(liker.short_description, lang)
-            translated_full = await translate_text_for_language(liker.full_description, lang)
-            translated_qualities = await translate_qualities_for_language(liker.qualities, lang)
-            profile_text = format_user_profile(
-                liker,
-                compatibility,
-                lang=lang,
-                short_description_override=translated_short,
-                full_description_override=translated_full,
-                qualities_override=translated_qualities,
-            )
+            profile_text = await build_translated_profile_text(liker, lang, compatibility)
             try:
                 await callback.message.delete()
             except Exception:
                 pass
-            if liker.photo_id:
-                await callback.message.answer_photo(
-                    photo=liker.photo_id,
-                    caption=profile_text,
-                    reply_markup=get_swipe_keyboard_from_notification(liker_id, lang=lang),
-                )
-            else:
-                await callback.message.answer(
-                    profile_text,
-                    reply_markup=get_swipe_keyboard_from_notification(liker_id, lang=lang),
-                )
+            await send_profile_card(
+                callback.message,
+                photo_id=liker.photo_id,
+                text=profile_text,
+                reply_markup=get_swipe_keyboard_from_notification(liker_id, lang=lang),
+            )
             break
     except Exception as e:
         logger.error("Ошибка при показе анкеты лайкнувшего: %s", e, exc_info=True)
@@ -1180,63 +1242,43 @@ async def _show_next_favorite_or_empty(
             pl = _get_user_profile(tr_shown, include_label=True)
             if pv and pl:
                 compatibility, _ = CompatibilityService.calculate_compatibility_detailed(pv, pl)
-        translated_short = await translate_text_for_language(user.short_description, lang)
-        translated_full = await translate_text_for_language(user.full_description, lang)
-        translated_qualities = await translate_qualities_for_language(user.qualities, lang)
-        profile_text = format_user_profile(
-            user,
-            compatibility,
-            expanded=False,
-            lang=lang,
-            short_description_override=translated_short,
-            full_description_override=translated_full,
-            qualities_override=translated_qualities,
+        profile_text = await build_translated_profile_text(
+            user, lang, compatibility, expanded=False
         )
         total = len(new_ids)
         kb = get_favorites_keyboard(uid, 0, total, expanded=False, lang=lang)
         if send_new_message:
             protect_message(msg.chat.id, msg.message_id)
-            if user.photo_id:
-                sent = await msg.answer_photo(
-                    photo=user.photo_id,
-                    caption=profile_text,
-                    reply_markup=kb,
-                    parse_mode="HTML",
-                )
-            else:
-                sent = await msg.answer(profile_text, reply_markup=kb, parse_mode="HTML")
+            sent = await send_profile_card(
+                msg,
+                photo_id=user.photo_id,
+                text=profile_text,
+                reply_markup=kb,
+            )
             await state.update_data(last_bot_message_id=sent.message_id)
         else:
-            try:
-                if msg.photo and user.photo_id:
+            edited = False
+            if msg.photo and user.photo_id:
+                try:
                     from aiogram.types import InputMediaPhoto
                     await msg.edit_media(
                         InputMediaPhoto(media=user.photo_id, caption=profile_text, parse_mode="HTML"),
                     )
                     await msg.edit_reply_markup(reply_markup=kb)
-                else:
+                    edited = True
+                except Exception:
+                    edited = False
+            if not edited:
+                try:
                     await msg.delete()
-                    if user.photo_id:
-                        sent = await msg.answer_photo(
-                            photo=user.photo_id,
-                            caption=profile_text,
-                            reply_markup=kb,
-                            parse_mode="HTML",
-                        )
-                    else:
-                        sent = await msg.answer(profile_text, reply_markup=kb, parse_mode="HTML")
-                    await state.update_data(last_bot_message_id=sent.message_id)
-            except Exception:
-                await msg.delete()
-                if user.photo_id:
-                    sent = await msg.answer_photo(
-                        photo=user.photo_id,
-                        caption=profile_text,
-                        reply_markup=kb,
-                        parse_mode="HTML",
-                    )
-                else:
-                    sent = await msg.answer(profile_text, reply_markup=kb, parse_mode="HTML")
+                except Exception:
+                    pass
+                sent = await send_profile_card(
+                    msg,
+                    photo_id=user.photo_id,
+                    text=profile_text,
+                    reply_markup=kb,
+                )
                 await state.update_data(last_bot_message_id=sent.message_id)
         break
 
@@ -1392,31 +1434,23 @@ async def handle_swipe_action(callback: CallbackQuery, state: FSMContext) -> Non
                     current_user = await UserRepository.get_by_telegram_id(session, swiper_user_id)
                     if current_user:
                         async for sess in get_session():
-                            next_data = await get_next_user_for_swipe(sess, swiper_user_id, current_user)
+                            next_data = await get_next_user_for_swipe(
+                                sess, swiper_user_id, current_user, last_shown_id=swiped_user_id
+                            )
                             if next_data:
                                 nu, comp = next_data
-                                translated_short = await translate_text_for_language(nu.short_description, lang)
-                                translated_full = await translate_text_for_language(nu.full_description, lang)
-                                translated_qualities = await translate_qualities_for_language(nu.qualities, lang)
-                                text = format_user_profile(
-                                    nu,
-                                    comp,
-                                    lang=lang,
-                                    short_description_override=translated_short,
-                                    full_description_override=translated_full,
-                                    qualities_override=translated_qualities,
+                                text = await build_translated_profile_text(nu, lang, comp)
+                                await send_profile_card(
+                                    callback.message,
+                                    photo_id=nu.photo_id,
+                                    text=text,
+                                    reply_markup=get_swipe_keyboard(
+                                        nu.telegram_id,
+                                        lang=lang,
+                                        has_super_like=getattr(current_user, "subscription_active", False)
+                                        and not getattr(current_user, "super_like_used", False),
+                                    ),
                                 )
-                                if nu.photo_id:
-                                    await callback.message.answer_photo(
-                                        photo=nu.photo_id,
-                                        caption=text,
-                                        reply_markup=get_swipe_keyboard(nu.telegram_id, lang=lang, has_super_like=getattr(current_user, "subscription_active", False) and not getattr(current_user, "super_like_used", False)),
-                                    )
-                                else:
-                                    await callback.message.answer(
-                                        text,
-                                        reply_markup=get_swipe_keyboard(nu.telegram_id, lang=lang, has_super_like=getattr(current_user, "subscription_active", False) and not getattr(current_user, "super_like_used", False)),
-                                    )
                             else:
                                 await callback.message.answer(
                                     f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_no_users')}",

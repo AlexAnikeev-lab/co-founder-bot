@@ -301,15 +301,27 @@ async def show_question(
         else:
             await state.set_state(TestStates.answering_question)
 
+        data = await state.get_data()
+        saved_answers = data.get("answers", {})
+        saved_key = f"Q{question_num}"
+        answer_hint = ""
+        if saved_key in saved_answers:
+            answer_hint = "\n\n" + t(lang, "test_current_answer").format(answer=saved_answers[saved_key])
+
         text = t(lang, "test_question_format").format(
             num=question_num, total=total_questions, text=q_text
-        )
+        ) + answer_hint
 
         try:
             await callback.message.edit_text(
                 text,
                 reply_markup=get_test_answer_keyboard(
-                    answers, question_num, test_type, is_scale=is_scale, lang=lang
+                    answers,
+                    question_num,
+                    test_type,
+                    is_scale=is_scale,
+                    lang=lang,
+                    total_questions=total_questions,
                 )
             )
         except Exception:
@@ -320,7 +332,12 @@ async def show_question(
             await callback.message.answer(
                 text,
                 reply_markup=get_test_answer_keyboard(
-                    answers, question_num, test_type, is_scale=is_scale, lang=lang
+                    answers,
+                    question_num,
+                    test_type,
+                    is_scale=is_scale,
+                    lang=lang,
+                    total_questions=total_questions,
                 )
             )
     except Exception as e:
@@ -356,15 +373,14 @@ async def process_test_answer(callback: CallbackQuery, state: FSMContext) -> Non
             )
             break
         
-        # Проверяем, последний ли это вопрос
         test_info = TEST_TYPES[test_type]
         total_questions = test_info["total_questions"]
         is_last = question_num >= total_questions
-        
+
         if is_last:
-            await finish_test(callback, state, test_type)
+            await state.update_data(current_question=question_num)
+            await show_question(callback, state, test_type, question_num)
         else:
-            # Сразу показываем следующий вопрос без подтверждения
             next_num = question_num + 1
             await state.update_data(current_question=next_num)
             await show_question(callback, state, test_type, next_num)

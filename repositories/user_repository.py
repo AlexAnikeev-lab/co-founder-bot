@@ -21,6 +21,7 @@ class User(Base):
     name: Mapped[Optional[str]]
     city: Mapped[Optional[str]]
     age: Mapped[Optional[int]]
+    birth_date: Mapped[Optional[str]] = mapped_column(default=None)  # ISO YYYY-MM-DD
     photo_id: Mapped[Optional[str]]
     short_description: Mapped[Optional[str]]  # Краткое описание
     full_description: Mapped[Optional[str]]  # Полное описание

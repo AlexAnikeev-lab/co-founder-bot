@@ -91,6 +91,7 @@ def get_test_answer_keyboard(
     test_type: str,
     is_scale: bool = False,
     lang: str = "ru",
+    total_questions: int | None = None,
 ) -> InlineKeyboardMarkup:
     """
     Клавиатура с вариантами ответов на вопрос теста
@@ -130,6 +131,11 @@ def get_test_answer_keyboard(
         builder.add(InlineKeyboardButton(
             text=t(lang, "test_prev_question_btn"),
             callback_data=f"prev_question:{test_type}:{question_num - 1}"
+        ))
+    if total_questions and question_num >= total_questions:
+        builder.add(InlineKeyboardButton(
+            text=t(lang, "test_finish_btn"),
+            callback_data=f"finish_test:{test_type}",
         ))
     builder.add(get_back_button("tests", lang))
     builder.adjust(1)

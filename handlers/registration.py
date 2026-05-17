@@ -42,6 +42,7 @@ from repositories.admin_archive_repository import AdminArchiveRepository
 from config import Config
 from utils.validators import (
     validate_age,
+    parse_age_input,
     validate_name,
     validate_photo,
     validate_city,
@@ -158,7 +159,9 @@ async def process_age(message: Message, state: FSMContext) -> None:
             await message.answer(t(lang, "error_start_required"))
             return
 
-        age = validate_age(message.text)
+        parsed = parse_age_input(message.text)
+        age = parsed[0] if parsed else None
+        birth_date_iso = parsed[1].isoformat() if parsed and parsed[1] else None
 
         lang = data.get("language", "ru")
         birth_text = t(lang, "birth_date_question")
@@ -176,7 +179,7 @@ async def process_age(message: Message, state: FSMContext) -> None:
                 )
             return
 
-        await state.update_data(age=age)
+        await state.update_data(age=age, birth_date=birth_date_iso)
 
         if age < config.MIN_AGE_FULL:
             learning_text = t(lang, "learning_mode_message")
@@ -376,7 +379,10 @@ async def process_telegram_access(
         phone_number = phone or (message.contact.phone_number if message.contact else None)
         await UserRepository.update(
             session, user,
-            age=data.get("age"), is_minor=is_minor, phone=phone_number,
+            age=data.get("age"),
+            birth_date=data.get("birth_date"),
+            is_minor=is_minor,
+            phone=phone_number,
             language=data.get("language", "ru"),
         )
 
