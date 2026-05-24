@@ -22,6 +22,8 @@ from keyboards.admin import (
     get_admin_broadcast_keyboard,
     get_admin_keyboard,
     get_admin_clear_confirm_keyboard,
+    get_admin_demo_users_keyboard,
+    get_admin_demo_delete_confirm_keyboard,
     get_admin_limits_keyboard,
     get_admin_users_page_keyboard,
     get_admin_live_users_page_keyboard,
@@ -104,6 +106,91 @@ async def cmd_admin(message: Message, state: FSMContext) -> None:
     await message.answer(text, reply_markup=get_admin_keyboard())
 
 
+def _parse_demo_seed_count(text: str | None) -> int:
+    from services.demo_test_users import DEMO_SEED_DEFAULT_COUNT, DEMO_SEED_MAX_BATCH
+
+    if not text:
+        return DEMO_SEED_DEFAULT_COUNT
+    parts = text.strip().split()
+    if len(parts) < 2:
+        return DEMO_SEED_DEFAULT_COUNT
+    try:
+        n = int(parts[1])
+    except ValueError:
+        return DEMO_SEED_DEFAULT_COUNT
+    return max(1, min(n, DEMO_SEED_MAX_BATCH))
+
+
+async def _admin_seed_demo_users(count: int) -> str:
+    from services.demo_test_users import (
+        count_demo_users,
+        format_demo_users_seed_report,
+        seed_demo_test_users,
+    )
+
+    async for session in get_session():
+        results = await seed_demo_test_users(session, count)
+        total = await count_demo_users(session)
+        return format_demo_users_seed_report(results, total_in_db=total)
+    return "❌ Ошибка сессии БД"
+
+
+@router.message(F.text.startswith("/add_test_user"))
+async def cmd_add_test_user(message: Message, state: FSMContext) -> None:
+    """Добавить N демо-пользователей: /add_test_user или /add_test_user 15"""
+    if not message.from_user:
+        return
+    if not _is_admin(message.from_user.id):
+        await message.answer(ADMIN_ACCESS_DENIED)
+        return
+
+    await state.clear()
+    count = _parse_demo_seed_count(message.text)
+    try:
+        text = await _admin_seed_demo_users(count)
+        await message.answer(text, parse_mode="HTML")
+    except Exception as e:
+        logger.exception("Ошибка создания демо-пользователей: %s", e)
+        await message.answer(f"❌ Не удалось создать демо-пользователей: {e}")
+
+
+@router.message(F.text.startswith("/delete_test_users"))
+async def cmd_delete_test_users(message: Message, state: FSMContext) -> None:
+    """Удалить всех демо: /delete_test_users confirm"""
+    if not message.from_user:
+        return
+    if not _is_admin(message.from_user.id):
+        await message.answer(ADMIN_ACCESS_DENIED)
+        return
+
+    from services.demo_test_users import count_demo_users, delete_all_demo_users, format_demo_users_delete_report
+
+    parts = (message.text or "").strip().split()
+    if len(parts) < 2 or parts[1].lower() != "confirm":
+        async for session in get_session():
+            total = await count_demo_users(session)
+            break
+        else:
+            total = 0
+        await message.answer(
+            f"🗑 Удалить всех демо-пользователей ({total})?\n\n"
+            "Подтверди: <code>/delete_test_users confirm</code>\n"
+            "Или кнопка в /admin → 🧪 Демо-пользователи",
+            parse_mode="HTML",
+        )
+        return
+
+    await state.clear()
+    try:
+        async for session in get_session():
+            stats = await delete_all_demo_users(session)
+            break
+        await message.answer(format_demo_users_delete_report(stats), parse_mode="HTML")
+    except Exception as e:
+        logger.exception("Ошибка удаления демо-пользователей: %s", e)
+        await message.answer(f"❌ Не удалось удалить: {e}")
+
+
 @router.message(F.text == "/test_payment_group")
 async def cmd_test_payment_group(message: Message) -> None:
     """Тест: отправить служебное сообщение в группу оплаты из /test_payment_group (только для админа)."""
@@ -144,6 +231,127 @@ async def admin_refresh(callback: CallbackQuery, state: FSMContext) -> None:
     except Exception:
         await callback.message.answer(text, reply_markup=get_admin_keyboard())
     await callback.answer()
+
+
+@router.callback_query(AdminCallbackData.filter(F.action == "demo_users"))
+async def admin_demo_users_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    """Меню управления демо-пользователями."""
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+
+    from services.demo_test_users import count_demo_users, format_demo_users_menu
+
+    await callback.answer()
+    await state.clear()
+    async for session in get_session():
+        total = await count_demo_users(session)
+        break
+    else:
+        total = 0
+    text = format_demo_users_menu(total)
+    try:
+        await callback.message.edit_text(
+            text, reply_markup=get_admin_demo_users_keyboard(), parse_mode="HTML"
+        )
+    except Exception:
+        await callback.message.answer(
+            text, reply_markup=get_admin_demo_users_keyboard(), parse_mode="HTML"
+        )
+
+
+@router.callback_query(AdminCallbackData.filter(F.action.startswith("demo_seed_")))
+async def admin_demo_seed(callback: CallbackQuery, callback_data: AdminCallbackData, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+
+    try:
+        count = int(callback_data.action.replace("demo_seed_", ""))
+    except ValueError:
+        await callback.answer("Ошибка", show_alert=True)
+        return
+
+    await callback.answer()
+    await state.clear()
+    try:
+        text = await _admin_seed_demo_users(count)
+        try:
+            await callback.message.edit_text(
+                text, reply_markup=get_admin_demo_users_keyboard(), parse_mode="HTML"
+            )
+        except Exception:
+            await callback.message.answer(
+                text, reply_markup=get_admin_demo_users_keyboard(), parse_mode="HTML"
+            )
+    except Exception as e:
+        logger.exception("Ошибка создания демо-пользователей: %s", e)
+        await callback.message.answer(f"❌ Не удалось создать демо-пользователей: {e}")
+
+
+@router.callback_query(AdminCallbackData.filter(F.action == "demo_delete_ask"))
+async def admin_demo_delete_ask(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+
+    from services.demo_test_users import count_demo_users
+
+    await callback.answer()
+    async for session in get_session():
+        total = await count_demo_users(session)
+        break
+    else:
+        total = 0
+    text = (
+        f"🗑 <b>Удалить всех демо-пользователей?</b>\n\n"
+        f"Будет удалено записей: <b>{total}</b>\n"
+        "Также свайпы, тесты и архив по ID 9000000001–9000010000."
+    )
+    try:
+        await callback.message.edit_text(
+            text, reply_markup=get_admin_demo_delete_confirm_keyboard(), parse_mode="HTML"
+        )
+    except Exception:
+        await callback.message.answer(
+            text, reply_markup=get_admin_demo_delete_confirm_keyboard(), parse_mode="HTML"
+        )
+
+
+@router.callback_query(AdminCallbackData.filter(F.action == "demo_delete_confirm"))
+async def admin_demo_delete_confirm(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+
+    from services.demo_test_users import delete_all_demo_users, format_demo_users_delete_report
+
+    await callback.answer()
+    await state.clear()
+    try:
+        async for session in get_session():
+            stats = await delete_all_demo_users(session)
+            break
+        text = format_demo_users_delete_report(stats)
+        try:
+            await callback.message.edit_text(
+                text, reply_markup=get_admin_demo_users_keyboard(), parse_mode="HTML"
+            )
+        except Exception:
+            await callback.message.answer(
+                text, reply_markup=get_admin_demo_users_keyboard(), parse_mode="HTML"
+            )
+    except Exception as e:
+        logger.exception("Ошибка удаления демо-пользователей: %s", e)
+        await callback.message.answer(f"❌ Не удалось удалить: {e}")
 
 
 @router.callback_query(AdminCallbackData.filter(F.action == "clear_swipes"))
@@ -1286,10 +1494,17 @@ async def admin_user_profile_view(callback: CallbackQuery, state: FSMContext) ->
         return
     await callback.answer()
     from handlers.swipe import build_translated_profile_text, _get_user_profile
+    from keyboards.swipe import get_admin_user_card_keyboard
     from repositories.test_repository import TestResultRepository
     from services.compatibility_service import CompatibilityService
+    from middlewares.delete_previous import protect_message
+    from utils.telegram_media import bot_send_profile_card
 
     admin_id = callback.from_user.id
+    chat_id = callback.message.chat.id
+    # Не удалять уведомление «Новый пользователь» при отправке анкеты
+    protect_message(chat_id, callback.message.message_id)
+
     async for session in get_session():
         user = await UserRepository.get_by_telegram_id(session, telegram_id)
         if not user:
@@ -1304,23 +1519,65 @@ async def admin_user_profile_view(callback: CallbackQuery, state: FSMContext) ->
         tr_viewer = await TestResultRepository.get_by_user_id(session, admin_id)
         tr_shown = await TestResultRepository.get_by_user_id(session, telegram_id)
         if tr_viewer and tr_shown and tr_viewer.main_test_completed and tr_shown.main_test_completed:
-            pv = _get_user_profile(tr_viewer)
-            pl = _get_user_profile(tr_shown)
+            pv = _get_user_profile(tr_viewer, include_label=True)
+            pl = _get_user_profile(tr_shown, include_label=True)
             if pv and pl:
                 compatibility, _ = CompatibilityService.calculate_compatibility_detailed(pv, pl)
-
-        from utils.telegram_media import send_profile_card
 
         profile_text = await build_translated_profile_text(
             user, viewer_lang, compatibility, expanded=False
         )
-        await send_profile_card(
-            callback.message,
+        kb = get_admin_user_card_keyboard(telegram_id, expanded=False, lang=viewer_lang)
+        await bot_send_profile_card(
+            callback.bot,
+            chat_id,
             photo_id=user.photo_id,
             text=profile_text,
+            reply_markup=kb,
             parse_mode="HTML",
         )
         break
+
+
+@router.callback_query(F.data.regexp(r"^adm_swipe_(like|bookmark|dislike):\d+$"))
+async def admin_user_swipe_action(callback: CallbackQuery) -> None:
+    """Лайк / избранное / дизлайк от админа (без лимитов, без перехода к следующей анкете)."""
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+    parts = (callback.data or "").split(":", 1)
+    if len(parts) != 2:
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    action = parts[0].replace("adm_swipe_", "")
+    if action not in ("like", "bookmark", "dislike"):
+        await callback.answer("Ошибка", show_alert=True)
+        return
+    try:
+        swiped_user_id = int(parts[1])
+    except ValueError:
+        await callback.answer("Ошибка", show_alert=True)
+        return
+
+    admin_id = callback.from_user.id
+    from handlers.swipe import _send_like_notification
+
+    async for session in get_session():
+        admin_user = await UserRepository.get_by_telegram_id(session, admin_id)
+        lang = getattr(admin_user, "language", None) or "ru" if admin_user else "ru"
+        await SwipeRepository.create_swipe(session, admin_id, swiped_user_id, action)
+        if action == "like" and admin_user and (admin_user.ban_status or "none") == "none":
+            swiped_user = await UserRepository.get_by_telegram_id(session, swiped_user_id)
+            notif_lang = (getattr(swiped_user, "language", None) or "ru") if swiped_user else "ru"
+            swiper_name = admin_user.name or t(lang, "card_user_fallback")
+            await _send_like_notification(
+                callback.bot, swiped_user_id, swiper_name, admin_id, lang=notif_lang
+            )
+        break
+
+    await callback.answer(t(lang, "swipe_action_done"))
 
 
 @router.callback_query(AdminPremiumCallbackData.filter(F.action.in_(("ask_give", "ask_remove"))))

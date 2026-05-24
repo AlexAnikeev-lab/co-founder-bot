@@ -29,10 +29,11 @@ from repositories.test_repository import TestResultRepository
 from repositories.events_repository import EventsRepository, Event
 from services.compatibility_service import CompatibilityService
 from texts.i18n import t, text_options
-from utils.errors import handle_error
+from utils.errors import handle_error, notify_admin_event_registration
 from utils.event_detail_payload import (
     detail_json_to_payload,
     legacy_payload_from_event,
+    plain_text_preview_from_payload,
     send_event_detail_message,
 )
 from utils.telegram_media import answer_photo_safe
@@ -45,12 +46,32 @@ def _event_detail_payload(ev: Event) -> dict:
     parsed = detail_json_to_payload(ev.detail_json)
     if parsed:
         return parsed
+    starts_at_str = "—"
+    if ev.starts_at:
+        try:
+            starts_at_str = ev.starts_at.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            starts_at_str = str(ev.starts_at)
     return legacy_payload_from_event(
-        title=ev.title,
-        description=ev.description,
-        price=ev.price,
-        starts_at_str=ev.starts_at.strftime("%d.%m.%Y %H:%M"),
+        title=ev.title or "Мероприятие",
+        description=ev.description or "—",
+        price=ev.price or "—",
+        starts_at_str=starts_at_str,
     )
+
+
+def _event_detail_fallback_text(ev: Event) -> str:
+    """Текст на случай, если медиа/file_id/entities не отправятся."""
+    title = html.escape((ev.title or "Мероприятие").strip())
+    desc = (ev.description or "").strip()
+    if desc:
+        return f"<b>{title}</b>\n\n{html.escape(desc[:8000])}"
+    parsed = detail_json_to_payload(ev.detail_json)
+    if parsed:
+        preview = plain_text_preview_from_payload(parsed)
+        if preview:
+            return f"<b>{title}</b>\n\n{html.escape(preview[:8000])}"
+    return f"<b>{title}</b>"
 
 
 async def _get_lang_and_minor(session: AsyncSession, user_id: int) -> tuple[str, bool]:
@@ -167,6 +188,7 @@ async def _show_event_detail(
         return
 
     payload = _event_detail_payload(ev)
+    fallback_text = _event_detail_fallback_text(ev)
     kb = get_event_card_keyboard(lang=lang, event_id=ev.id)
 
     if isinstance(message_or_callback, CallbackQuery):
@@ -178,34 +200,24 @@ async def _show_event_detail(
             await msg.delete()
         except Exception:
             pass
-        try:
-            sent = await send_event_detail_message(
-                msg.bot,
-                msg.chat.id,
-                payload,
-                reply_markup=kb,
-            )
-            await state.update_data(last_bot_message_id=sent.message_id)
-        except Exception as e:
-            logger.error("Ошибка показа описания мероприятия: %s", e, exc_info=True)
-            await handle_error(None, e, "_show_event_detail")
-            sent = await msg.answer("❌ " + t(lang, "error_try_later"), reply_markup=kb)
-            await state.update_data(last_bot_message_id=sent.message_id)
+        sent = await send_event_detail_message(
+            msg.bot,
+            msg.chat.id,
+            payload,
+            reply_markup=kb,
+            fallback_text=fallback_text,
+        )
+        await state.update_data(last_bot_message_id=sent.message_id)
     else:
         m = message_or_callback
-        try:
-            sent = await send_event_detail_message(
-                m.bot,
-                m.chat.id,
-                payload,
-                reply_markup=kb,
-            )
-            await state.update_data(last_bot_message_id=sent.message_id)
-        except Exception as e:
-            logger.error("Ошибка показа описания мероприятия: %s", e, exc_info=True)
-            await handle_error(None, e, "_show_event_detail")
-            sent = await m.answer("❌ " + t(lang, "error_try_later"), reply_markup=kb)
-            await state.update_data(last_bot_message_id=sent.message_id)
+        sent = await send_event_detail_message(
+            m.bot,
+            m.chat.id,
+            payload,
+            reply_markup=kb,
+            fallback_text=fallback_text,
+        )
+        await state.update_data(last_bot_message_id=sent.message_id)
 
 
 @router.message(F.text.in_(text_options("menu_events")))
@@ -321,6 +333,17 @@ async def events_join(callback: CallbackQuery, callback_data: EventsCallbackData
         ok = await EventsRepository.register_user(session, callback_data.event_id, callback.from_user.id)
         await callback.answer()
         await callback.message.answer(t(lang, "events_join_ok") if ok else t(lang, "events_join_already"))
+        if ok:
+            ev = await EventsRepository.get_by_id(session, callback_data.event_id)
+            if ev:
+                display_name = (user.name or "").strip() or (callback.from_user.full_name or "").strip()
+                await notify_admin_event_registration(
+                    callback.bot,
+                    user_name=display_name or "Без имени",
+                    telegram_id=callback.from_user.id,
+                    username=getattr(user, "username", None) or callback.from_user.username,
+                    event_title=ev.title,
+                )
     except Exception as e:
         logger.error("Ошибка регистрации на мероприятие: %s", e, exc_info=True)
         await handle_error(None, e, "events_join")

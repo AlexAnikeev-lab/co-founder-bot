@@ -125,6 +125,40 @@ def get_swipe_keyboard_from_notification(
     return builder.as_markup()
 
 
+def get_admin_user_card_keyboard(
+    swiped_user_id: int,
+    expanded: bool = False,
+    lang: str = "ru",
+) -> InlineKeyboardMarkup:
+    """Карточка пользователя для админа: лайк, избранное, дизлайк, развернуть/свернуть."""
+    from texts.i18n import t
+
+    expand_btn = t(lang, "card_expand_btn")
+    collapse_btn = t(lang, "card_collapse_btn")
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(text="🤝", callback_data=f"adm_swipe_like:{swiped_user_id}"),
+        InlineKeyboardButton(text="🌟", callback_data=f"adm_swipe_bookmark:{swiped_user_id}"),
+        InlineKeyboardButton(text="👎", callback_data=f"adm_swipe_dislike:{swiped_user_id}"),
+    )
+    builder.adjust(3)
+    if expanded:
+        builder.row(
+            InlineKeyboardButton(
+                text=collapse_btn,
+                callback_data=f"adm_collapse_profile:{swiped_user_id}",
+            )
+        )
+    else:
+        builder.row(
+            InlineKeyboardButton(
+                text=expand_btn,
+                callback_data=f"adm_expand_profile:{swiped_user_id}",
+            )
+        )
+    return builder.as_markup()
+
+
 def get_favorites_keyboard(
     swiped_user_id: int,
     index: int,

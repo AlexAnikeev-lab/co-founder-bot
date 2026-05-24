@@ -61,6 +61,8 @@ def _remove_expand_controls(reply_markup: InlineKeyboardMarkup | None) -> Inline
             if (
                 cb.startswith("expand_profile")
                 or cb.startswith("collapse_profile")
+                or cb.startswith("adm_expand_profile")
+                or cb.startswith("adm_collapse_profile")
                 or cb.startswith("expand_favorites")
                 or cb.startswith("collapse_favorites")
             ):
@@ -868,6 +870,8 @@ async def handle_partners_reply_action(
 
 @router.callback_query(F.data.startswith("expand_profile"))
 @router.callback_query(F.data.startswith("collapse_profile"))
+@router.callback_query(F.data.startswith("adm_expand_profile"))
+@router.callback_query(F.data.startswith("adm_collapse_profile"))
 async def handle_expand_collapse_profile(callback: CallbackQuery) -> None:
     """
     Показать дополнительный блок по кнопке «Подробнее».
@@ -876,15 +880,26 @@ async def handle_expand_collapse_profile(callback: CallbackQuery) -> None:
     """
     await callback.answer()
     try:
-        raw = callback.data
-        is_expand = raw.startswith("expand_profile:") or raw.startswith("expand_profile_notif:")
+        raw = callback.data or ""
+        is_expand = (
+            raw.startswith("expand_profile:")
+            or raw.startswith("expand_profile_notif:")
+            or raw.startswith("adm_expand_profile:")
+        )
         if not is_expand:
-            # Для текущего UX «Свернуть» ничего не меняет в исходной карточке.
             return
-        parts = callback.data.split(":")
-        if len(parts) != 2:
-            return
-        swiped_user_id = int(parts[1])
+        if raw.startswith("adm_expand_profile:"):
+            from config import Config
+
+            if callback.from_user.id not in Config().ADMIN_IDS:
+                await callback.answer(t("ru", "error_try_later"), show_alert=True)
+                return
+            swiped_user_id = int(raw.split(":", 1)[1])
+        else:
+            parts = raw.split(":")
+            if len(parts) != 2:
+                return
+            swiped_user_id = int(parts[1])
         viewer_id = callback.from_user.id
 
         async for session in get_session():

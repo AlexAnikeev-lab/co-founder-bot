@@ -23,6 +23,8 @@ async def main() -> None:
     
     # Загрузка конфигурации
     config = Config()
+    if config.TEST_MODE:
+        logger.warning("TEST_MODE=true — бот использует настройки из .env.test")
     
     #
     try:

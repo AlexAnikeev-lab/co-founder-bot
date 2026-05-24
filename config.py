@@ -138,20 +138,44 @@ def get_events_list_photo_path(lang: str = "ru") -> Optional[Path]:
     return path if path.exists() else None
 
 
-def _load_dotenv_safe() -> None:
-    """Загрузка .env с поддержкой UTF-8 и Windows (cp1251)."""
-    env_path = PROJECT_ROOT / ".env"
+def _is_truthy(value: Optional[str]) -> bool:
+    """Парсинг булевых значений из .env (true/1/yes/on)."""
+    if not value:
+        return False
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _load_env_file(env_name: str, *, override: bool = False) -> None:
+    """Загрузка одного env-файла с поддержкой UTF-8 и Windows (cp1251)."""
+    env_path = PROJECT_ROOT / env_name
     if not env_path.exists():
-        load_dotenv()
+        if env_name == ".env":
+            load_dotenv(override=override)
         return
     for encoding in ("utf-8", "cp1251", "utf-8-sig"):
         try:
             with open(env_path, "r", encoding=encoding) as f:
-                load_dotenv(stream=f)
+                load_dotenv(stream=f, override=override)
             return
         except UnicodeDecodeError:
             continue
-    load_dotenv()
+    load_dotenv(override=override)
+
+
+def _load_dotenv_safe() -> None:
+    """
+    Загрузка переменных окружения:
+    - ENV_FILE в shell (run_test.sh, Docker) — только этот файл;
+    - иначе .env, и при TEST_MODE=true — поверх .env.test.
+    """
+    env_file_from_shell = os.getenv("ENV_FILE", "").strip()
+    if env_file_from_shell:
+        _load_env_file(env_file_from_shell)
+        return
+
+    _load_env_file(".env")
+    if _is_truthy(os.getenv("TEST_MODE")):
+        _load_env_file(".env.test", override=True)
 
 
 _load_dotenv_safe()
@@ -159,6 +183,9 @@ _load_dotenv_safe()
 
 class Config:
     """Класс конфигурации бота"""
+
+    # Тестовый режим: конфиг из .env.test (см. TEST_MODE в .env)
+    TEST_MODE: bool = _is_truthy(os.getenv("TEST_MODE"))
     
     # Версия бота
     VERSION: str = "1.0.1"

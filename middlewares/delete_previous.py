@@ -11,6 +11,8 @@ from typing import Any, Awaitable, Callable, Dict, List
 from aiogram import Bot, BaseMiddleware
 from aiogram.types import TelegramObject, Message, CallbackQuery
 
+from utils.telegram_media import send_photo_with_fallback
+
 logger = logging.getLogger(__name__)
 
 # Хранилище: chat_id -> список message_id (ограничиваем размер пачки)
@@ -86,11 +88,12 @@ class BotDeletePrevious(Bot):
     async def send_photo(self, chat_id: int, photo: Any = None, **kwargs) -> Message:
         if photo is not None:
             kwargs["photo"] = photo
+        photo_media = kwargs.pop("photo", photo)
         ids = _last_message_ids.get(chat_id) or []
         if ids:
             _last_message_ids[chat_id] = []
             asyncio.create_task(_delete_previous_messages(self, chat_id, ids))
-        msg = await super().send_photo(chat_id, **kwargs)
+        msg = await send_photo_with_fallback(self, chat_id, photo_media, **kwargs)
         _append_message_id(chat_id, msg.message_id)
         return msg
 

@@ -19,7 +19,7 @@ from repositories.user_repository import UserRepository
 from repositories.test_repository import TestResultRepository
 from repositories.database import get_session
 from texts.i18n import t, text_options
-from utils.errors import handle_error
+from utils.errors import handle_error, notify_admin_new_user
 from texts.test_questions import TEST_TYPES
 from services.compatibility_service import CompatibilityService
 
@@ -446,15 +446,30 @@ async def finish_test(
     try:
         data = await state.get_data()
         answers = data.get("answers", {})
-        
+        user_id = callback.from_user.id
+        main_was_completed = False
+
         # Отмечаем тест как завершенный
         async for session in get_session():
-            await TestResultRepository.mark_completed(
-                session,
-                callback.from_user.id,
-                test_type
-            )
+            prev = await TestResultRepository.get_by_user_id(session, user_id)
+            main_was_completed = bool(prev and prev.main_test_completed)
+            await TestResultRepository.mark_completed(session, user_id, test_type)
             break
+
+        if test_type == "main" and not main_was_completed:
+            async for session in get_session():
+                user = await UserRepository.get_by_telegram_id(session, user_id)
+                if user and user.is_registered:
+                    try:
+                        await notify_admin_new_user(
+                            callback.bot,
+                            user.name or "",
+                            user.telegram_id,
+                            user.username,
+                        )
+                    except Exception as e:
+                        logger.exception("Ошибка уведомления админам о новом пользователе: %s", e)
+                break
         
         # Рассчитываем профиль, если основной тест пройден
         async for session in get_session():

@@ -33,6 +33,69 @@ def is_invalid_telegram_file_error(exc: BaseException) -> bool:
     return any(marker in text for marker in _INVALID_FILE_MARKERS)
 
 
+def _should_fallback_photo_to_text(exc: BaseException) -> bool:
+    """Текст без фото — при битом file_id и прочих ошибках отправки медиа в Telegram."""
+    if isinstance(exc, TelegramBadRequest):
+        return True
+    return is_invalid_telegram_file_error(exc)
+
+
+async def _send_text_instead_of_photo(
+    bot: Bot,
+    chat_id: int,
+    *,
+    caption: Optional[str],
+    parse_mode: str = "HTML",
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+) -> Message:
+    text = (caption or "").strip() or " "
+    return await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode=parse_mode,
+        reply_markup=reply_markup,
+    )
+
+
+async def send_photo_with_fallback(
+    bot: Bot,
+    chat_id: int,
+    photo: Any,
+    *,
+    caption: Optional[str] = None,
+    parse_mode: str = "HTML",
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    **kwargs: Any,
+) -> Message:
+    """send_photo → при недоступном file_id/фото тот же текст без картинки."""
+    extra = dict(kwargs)
+    extra.pop("photo", None)
+    if extra.pop("has_media_spoiler", None):
+        extra["has_spoiler"] = True
+    try:
+        # Bot.send_photo напрямую — иначе BotDeletePrevious.send_photo уходит в рекурсию
+        return await Bot.send_photo(
+            bot,
+            chat_id=chat_id,
+            photo=photo,
+            caption=caption,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            **extra,
+        )
+    except Exception as exc:
+        if not _should_fallback_photo_to_text(exc):
+            raise
+        logger.warning("send_photo → текст (chat=%s): %s", chat_id, exc)
+        return await _send_text_instead_of_photo(
+            bot,
+            chat_id,
+            caption=caption,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+
+
 async def send_photo_safe(
     bot: Bot,
     chat_id: int,
@@ -43,24 +106,16 @@ async def send_photo_safe(
     reply_markup: Optional[InlineKeyboardMarkup] = None,
     **kwargs: Any,
 ) -> Message:
-    """send_photo с fallback на текст, если file_id/фото недоступны."""
-    try:
-        return await bot.send_photo(
-            chat_id=chat_id,
-            photo=photo,
-            caption=caption,
-            parse_mode=parse_mode,
-            reply_markup=reply_markup,
-            **kwargs,
-        )
-    except (TelegramBadRequest, Exception) as exc:
-        logger.warning("send_photo → текст (chat=%s): %s", chat_id, exc)
-        return await bot.send_message(
-            chat_id=chat_id,
-            text=caption or " ",
-            parse_mode=parse_mode,
-            reply_markup=reply_markup,
-        )
+    """Алиас send_photo_with_fallback."""
+    return await send_photo_with_fallback(
+        bot,
+        chat_id,
+        photo,
+        caption=caption,
+        parse_mode=parse_mode,
+        reply_markup=reply_markup,
+        **kwargs,
+    )
 
 
 async def answer_photo_safe(
@@ -72,7 +127,7 @@ async def answer_photo_safe(
     reply_markup: Optional[InlineKeyboardMarkup] = None,
     **kwargs: Any,
 ) -> Message:
-    """answer_photo с fallback на текст."""
+    """answer_photo → при недоступном file_id/фото тот же текст без картинки."""
     try:
         return await message.answer_photo(
             photo=photo,
@@ -81,10 +136,12 @@ async def answer_photo_safe(
             reply_markup=reply_markup,
             **kwargs,
         )
-    except (TelegramBadRequest, Exception) as exc:
+    except Exception as exc:
+        if not _should_fallback_photo_to_text(exc):
+            raise
         logger.warning("answer_photo → текст: %s", exc)
         return await message.answer(
-            text=caption or " ",
+            text=(caption or "").strip() or " ",
             parse_mode=parse_mode,
             reply_markup=reply_markup,
         )

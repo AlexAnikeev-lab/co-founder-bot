@@ -31,6 +31,29 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
+async def ensure_profile_section_menu(message: Message, state: FSMContext, user_id: int) -> None:
+    """Восстановить «Выберите раздел» и reply-кнопки профиля (после подраздела Люди/Тесты)."""
+    data = await state.get_data()
+    if data.get("profile_section_message_id"):
+        return
+    lang, is_minor = "ru", False
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, user_id)
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+            is_minor = user.is_minor
+        break
+    sec = await message.answer(
+        t(lang, "choose_section"),
+        reply_markup=get_profile_reply_keyboard(is_minor, lang),
+    )
+    await state.update_data(
+        in_profile=True,
+        profile_screen="profile",
+        profile_section_message_id=sec.message_id,
+    )
+
+
 async def send_profile_view(
     message: Message, user_id: int, state: FSMContext, edit_message_id: int | None = None
 ) -> None:
@@ -148,10 +171,13 @@ async def send_profile_view(
                 reply_markup=kb,
             )
             await state.update_data(last_bot_message_id=msg.message_id)
-            await message.answer(
+            sec = await message.answer(
                 t(lang, "choose_section"),
                 reply_markup=get_profile_reply_keyboard(user.is_minor, lang),
             )
+            await state.update_data(profile_section_message_id=sec.message_id)
+        if edit_message_id:
+            await ensure_profile_section_menu(message, state, user_id)
         break
 
 
@@ -720,26 +746,37 @@ async def show_matches(callback: CallbackQuery, state: FSMContext) -> None:
     """Совпадения — список людей с взаимным лайком и кнопка «Перейти в ЛС»"""
     await callback.answer()
     await state.update_data(profile_screen="matches")
-    from keyboards.menu import get_people_keyboard
-    from repositories.database import get_session
+    from keyboards.common import get_back_button
     from repositories.swipe_repository import SwipeRepository
-    from repositories.user_repository import UserRepository
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from aiogram.types import InlineKeyboardButton
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     user_id = callback.from_user.id
+    lang = "ru"
+    async for session in get_session():
+        _u = await UserRepository.get_by_telegram_id(session, user_id)
+        if _u:
+            lang = getattr(_u, "language", None) or "ru"
+        break
+
     builder = InlineKeyboardBuilder()
+    text = t(lang, "favorites_load_list_error")
 
     try:
         async for session in get_session():
             match_ids = await SwipeRepository.get_mutual_matches(session, user_id)
             if not match_ids:
-                text = t(lang, "people_matches") + "\n\n" + t(lang, "matches_empty_text") + "\n\n" + t(lang, "matches_empty_hint")
-                builder.adjust(1)
+                from keyboards.menu import get_people_keyboard
+
+                text = (
+                    t(lang, "people_matches")
+                    + "\n\n"
+                    + t(lang, "matches_empty_text")
+                    + "\n\n"
+                    + t(lang, "matches_empty_hint")
+                )
+                kb = get_people_keyboard(lang)
                 break
-            # Загружаем пользователей по id
-            _u = await UserRepository.get_by_telegram_id(session, user_id)
-            lang = (getattr(_u, "language", None) or "ru") if _u else "ru"
             lines = [t(lang, "people_matches") + "\n\n" + t(lang, "matches_list_title") + "\n"]
             for mid in match_ids:
                 u = await UserRepository.get_by_telegram_id(session, mid)
@@ -752,35 +789,24 @@ async def show_matches(callback: CallbackQuery, state: FSMContext) -> None:
                         InlineKeyboardButton(text=t(lang, "matches_btn_dm").format(name=name), url=url)
                     )
             builder.adjust(1)
+            builder.row(get_back_button("people", lang))
             text = "\n".join(lines)
+            kb = builder.as_markup()
             break
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error("Ошибка загрузки совпадений: %s", e, exc_info=True)
-        _lang = "ru"
-        async for _s in get_session():
-            _u = await UserRepository.get_by_telegram_id(_s, user_id)
-            if _u:
-                _lang = getattr(_u, "language", None) or "ru"
-            break
-        text = t(_lang, "favorites_load_list_error")
-        builder.adjust(1)
+        logger.error("Ошибка загрузки совпадений: %s", e, exc_info=True)
+        builder.row(get_back_button("people", lang))
+        kb = builder.as_markup()
 
     try:
-        await callback.message.edit_text(
-            text,
-            reply_markup=builder.as_markup(),
-        )
+        await callback.message.edit_text(text, reply_markup=kb)
         await state.update_data(last_bot_message_id=callback.message.message_id)
     except Exception:
         try:
             await callback.message.delete()
         except Exception:
             pass
-        sent = await callback.message.answer(
-            text,
-            reply_markup=builder.as_markup(),
-        )
+        sent = await callback.message.answer(text, reply_markup=kb)
         await state.update_data(last_bot_message_id=sent.message_id)
 
 

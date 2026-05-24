@@ -1,21 +1,22 @@
 """
 Сериализация и отправка «карточки» мероприятия как в Telegram:
 текст + MessageEntity (цитаты, кастомные эмодзи и т.д.), фото/видео с подписью.
-
-Соответствует Bot API: при передаче entities не используется parse_mode
-(см. sendMessage: entities и parse_mode взаимоисключающи).
 """
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 from typing import Any
 
 from aiogram import Bot
 from aiogram.enums import ContentType
+from aiogram.exceptions import TelegramBadRequest, TelegramAPIError
 from aiogram.types import Message, MessageEntity
 from aiogram.types import InlineKeyboardMarkup
+
+from utils.telegram_media import send_photo_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -143,11 +144,14 @@ def legacy_payload_from_event(
     starts_at_str: str,
 ) -> dict[str, Any]:
     """Старые записи без detail_json — показываем как HTML без entities."""
+    safe_title = html.escape(title or "Мероприятие")
+    safe_desc = html.escape(description or "—")
+    safe_price = html.escape(price or "—")
     text = (
-        f"<b>{title}</b>\n\n"
-        f"{description}\n\n"
-        f"💰 <b>Стоимость:</b> {price}\n"
-        f"🗓 <b>Дата и время:</b> {starts_at_str}"
+        f"<b>{safe_title}</b>\n\n"
+        f"{safe_desc}\n\n"
+        f"💰 <b>Стоимость:</b> {safe_price}\n"
+        f"🗓 <b>Дата и время:</b> {html.escape(starts_at_str)}"
     )
     return {
         "v": PAYLOAD_VERSION,
@@ -158,33 +162,94 @@ def legacy_payload_from_event(
     }
 
 
+def _spoiler_kwargs(payload: dict[str, Any]) -> dict[str, bool]:
+    """aiogram 3: параметр has_spoiler (в payload храним has_media_spoiler с Message)."""
+    if payload.get("has_media_spoiler"):
+        return {"has_spoiler": True}
+    return {}
+
+
+def _pick_send_text(payload: dict[str, Any], fallback_text: str | None) -> str:
+    preview = plain_text_preview_from_payload(payload).strip()
+    if preview:
+        return preview
+    if fallback_text and fallback_text.strip():
+        return fallback_text.strip()
+    return "📅 Мероприятие"
+
+
+async def _safe_send_message(
+    bot: Bot,
+    chat_id: int,
+    text: str,
+    *,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    entities: list[MessageEntity] | None = None,
+    parse_mode: str | None = None,
+) -> Message:
+    """Отправка текста с цепочкой fallback — карточка всегда доходит."""
+    body = (text or "").strip() or "📅 Мероприятие"
+
+    if parse_mode == "HTML":
+        try:
+            return await Bot.send_message(
+                bot,
+                chat_id=chat_id,
+                text=body,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+        except (TelegramBadRequest, TelegramAPIError) as exc:
+            logger.warning("event HTML send failed: %s", exc)
+
+    if entities:
+        try:
+            return await Bot.send_message(
+                bot,
+                chat_id=chat_id,
+                text=body,
+                entities=entities,
+                reply_markup=reply_markup,
+            )
+        except (TelegramBadRequest, TelegramAPIError) as exc:
+            logger.warning("event entities send failed: %s", exc)
+
+    try:
+        return await Bot.send_message(
+            bot,
+            chat_id=chat_id,
+            text=body,
+            reply_markup=reply_markup,
+        )
+    except (TelegramBadRequest, TelegramAPIError) as exc:
+        logger.warning("event plain send failed: %s", exc)
+        return await Bot.send_message(
+            bot,
+            chat_id=chat_id,
+            text="📅 Мероприятие",
+            reply_markup=reply_markup,
+        )
+
+
 async def _send_text_payload(
     bot: Bot,
     chat_id: int,
     payload: dict[str, Any],
     *,
     reply_markup: InlineKeyboardMarkup | None = None,
-):
-    text = payload.get("text") or ""
+    fallback_text: str | None = None,
+) -> Message:
+    text = payload.get("text") or _pick_send_text(payload, fallback_text)
     pm = payload.get("parse_mode")
     entities = _load_entities(payload.get("entities"))
-    if pm == "HTML":
-        return await bot.send_message(
-            chat_id, text, parse_mode="HTML", reply_markup=reply_markup
-        )
-    try:
-        return await bot.send_message(
-            chat_id,
-            text,
-            entities=entities,
-            reply_markup=reply_markup,
-            parse_mode=None,
-        )
-    except Exception as exc:
-        logger.warning("send_message с entities не удался, fallback на plain text: %s", exc)
-        return await bot.send_message(
-            chat_id, text or plain_text_preview_from_payload(payload), reply_markup=reply_markup
-        )
+    return await _safe_send_message(
+        bot,
+        chat_id,
+        text,
+        reply_markup=reply_markup,
+        entities=entities if pm != "HTML" else None,
+        parse_mode=pm if pm == "HTML" else None,
+    )
 
 
 async def _send_media_payload(
@@ -192,27 +257,70 @@ async def _send_media_payload(
     chat_id: int,
     payload: dict[str, Any],
     *,
-    send_fn,
+    send_method: str,
     file_kw: str,
     reply_markup: InlineKeyboardMarkup | None = None,
-):
+    fallback_text: str | None = None,
+) -> Message:
+    file_id = payload.get("file_id")
+    caption = (payload.get("caption") or "").strip()
     entities = _load_entities(payload.get("entities"))
-    caption = payload.get("caption") or ""
+    fallback_body = caption or _pick_send_text(payload, fallback_text)
+
+    if not file_id:
+        return await _safe_send_message(
+            bot, chat_id, fallback_body, reply_markup=reply_markup
+        )
+
+    send_fn = getattr(Bot, f"send_{send_method}", None)
+    if send_fn is None:
+        return await _safe_send_message(
+            bot, chat_id, fallback_body, reply_markup=reply_markup
+        )
+
+    if send_method == "photo":
+        try:
+            return await send_photo_with_fallback(
+                bot,
+                chat_id,
+                file_id,
+                caption=caption or fallback_body,
+                parse_mode="HTML" if not entities else None,
+                reply_markup=reply_markup,
+                caption_entities=entities if entities else None,
+                **_spoiler_kwargs(payload),
+            )
+        except Exception as exc:
+            logger.warning("event photo send failed: %s", exc)
+
     kwargs: dict[str, Any] = {
-        file_kw: payload["file_id"],
-        "caption": caption,
-        "caption_entities": entities,
+        file_kw: file_id,
+        "caption": caption or None,
         "reply_markup": reply_markup,
-        "parse_mode": None,
     }
-    if file_kw in ("photo", "video", "animation"):
-        kwargs["has_media_spoiler"] = bool(payload.get("has_media_spoiler"))
+    if entities:
+        kwargs["caption_entities"] = entities
+    if send_method in ("photo", "video", "animation"):
+        kwargs.update(_spoiler_kwargs(payload))
+
     try:
-        return await send_fn(chat_id, **kwargs)
-    except Exception as exc:
-        logger.warning("Отправка медиа мероприятия не удалась (%s), fallback на текст: %s", file_kw, exc)
-        fallback = caption.strip() or plain_text_preview_from_payload(payload)
-        return await bot.send_message(chat_id, fallback or "[мероприятие]", reply_markup=reply_markup)
+        return await send_fn(bot, chat_id=chat_id, **kwargs)
+    except (TelegramBadRequest, TelegramAPIError, TypeError) as exc:
+        logger.warning("event %s send failed: %s", send_method, exc)
+
+    if entities and caption:
+        try:
+            return await send_fn(
+                bot,
+                chat_id=chat_id,
+                **{file_kw: file_id, "caption": caption, "reply_markup": reply_markup},
+            )
+        except (TelegramBadRequest, TelegramAPIError, TypeError) as exc:
+            logger.warning("event %s retry without entities failed: %s", send_method, exc)
+
+    return await _safe_send_message(
+        bot, chat_id, fallback_body, reply_markup=reply_markup
+    )
 
 
 async def send_event_detail_message(
@@ -221,38 +329,67 @@ async def send_event_detail_message(
     payload: dict[str, Any],
     *,
     reply_markup: InlineKeyboardMarkup | None = None,
-):
+    fallback_text: str | None = None,
+) -> Message:
     """
-    Отправляет сохранённое описание. Возвращает объект Message.
-    При ошибке file_id/entities — текстовый fallback, чтобы карточка открывалась.
+    Отправляет сохранённое описание. Всегда возвращает Message (не бросает наружу).
     """
+    if not payload or not isinstance(payload, dict):
+        return await _safe_send_message(
+            bot,
+            chat_id,
+            fallback_text or "📅 Мероприятие",
+            reply_markup=reply_markup,
+        )
+
     kind = payload.get("kind")
-    if kind == "text":
-        return await _send_text_payload(bot, chat_id, payload, reply_markup=reply_markup)
-    if kind == "photo":
-        return await _send_media_payload(
-            bot, chat_id, payload, send_fn=bot.send_photo, file_kw="photo", reply_markup=reply_markup
-        )
-    if kind == "video":
-        return await _send_media_payload(
-            bot, chat_id, payload, send_fn=bot.send_video, file_kw="video", reply_markup=reply_markup
-        )
-    if kind == "animation":
-        return await _send_media_payload(
-            bot,
-            chat_id,
-            payload,
-            send_fn=bot.send_animation,
-            file_kw="animation",
-            reply_markup=reply_markup,
-        )
-    if kind == "document":
-        return await _send_media_payload(
-            bot,
-            chat_id,
-            payload,
-            send_fn=bot.send_document,
-            file_kw="document",
-            reply_markup=reply_markup,
-        )
-    raise ValueError(f"Неизвестный kind описания мероприятия: {kind}")
+    try:
+        if kind == "text":
+            return await _send_text_payload(
+                bot, chat_id, payload, reply_markup=reply_markup, fallback_text=fallback_text
+            )
+        if kind == "photo":
+            return await _send_media_payload(
+                bot,
+                chat_id,
+                payload,
+                send_method="photo",
+                file_kw="photo",
+                reply_markup=reply_markup,
+                fallback_text=fallback_text,
+            )
+        if kind == "video":
+            return await _send_media_payload(
+                bot,
+                chat_id,
+                payload,
+                send_method="video",
+                file_kw="video",
+                reply_markup=reply_markup,
+                fallback_text=fallback_text,
+            )
+        if kind == "animation":
+            return await _send_media_payload(
+                bot,
+                chat_id,
+                payload,
+                send_method="animation",
+                file_kw="animation",
+                reply_markup=reply_markup,
+                fallback_text=fallback_text,
+            )
+        if kind == "document":
+            return await _send_media_payload(
+                bot,
+                chat_id,
+                payload,
+                send_method="document",
+                file_kw="document",
+                reply_markup=reply_markup,
+                fallback_text=fallback_text,
+            )
+    except Exception as exc:
+        logger.error("send_event_detail_message(%s): %s", kind, exc, exc_info=True)
+
+    body = plain_text_preview_from_payload(payload) or fallback_text or "📅 Мероприятие"
+    return await _safe_send_message(bot, chat_id, body, reply_markup=reply_markup)

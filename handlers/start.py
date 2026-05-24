@@ -16,6 +16,7 @@ from repositories.user_repository import UserRepository, User
 from config import get_registration_photo_path, get_registration_photo_file_id
 from utils.errors import handle_error
 from utils.registration_photos import show_registration_step
+from utils.telegram_media import send_photo_safe
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -82,9 +83,10 @@ async def welcome_gas(callback: CallbackQuery, state: FSMContext) -> None:
                 await callback.message.delete()
             except Exception:
                 pass
-            await callback.bot.send_photo(
-                chat_id=callback.message.chat.id,
-                photo=photo,
+            await send_photo_safe(
+                callback.bot,
+                callback.message.chat.id,
+                photo,
                 caption=welcome2_text,
                 reply_markup=get_welcome_step2_button(lang),
                 parse_mode="HTML",

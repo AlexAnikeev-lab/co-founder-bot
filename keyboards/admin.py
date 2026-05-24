@@ -91,6 +91,12 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
     )
     builder.add(
         InlineKeyboardButton(
+            text="🧪 Демо-пользователи",
+            callback_data=AdminCallbackData(action="demo_users").pack(),
+        )
+    )
+    builder.add(
+        InlineKeyboardButton(
             text="🗑 Очистить свайпы",
             callback_data=AdminCallbackData(action="clear_swipes").pack()
         )
@@ -358,6 +364,45 @@ def get_admin_clear_confirm_keyboard() -> InlineKeyboardMarkup:
             text="❌ Отмена",
             callback_data=AdminCallbackData(action="clear_cancel").pack()
         )
+    )
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_admin_demo_users_keyboard() -> InlineKeyboardMarkup:
+    """Управление демо-пользователями."""
+    builder = InlineKeyboardBuilder()
+    for n in (5, 10, 20):
+        builder.add(
+            InlineKeyboardButton(
+                text=f"➕ Добавить {n}",
+                callback_data=AdminCallbackData(action=f"demo_seed_{n}").pack(),
+            )
+        )
+    builder.adjust(3)
+    builder.row(
+        InlineKeyboardButton(
+            text="🗑 Удалить всех демо",
+            callback_data=AdminCallbackData(action="demo_delete_ask").pack(),
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(text="🔙 К админ-панели", callback_data=AdminCallbackData(action="back").pack())
+    )
+    return builder.as_markup()
+
+
+def get_admin_demo_delete_confirm_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(
+            text="✅ Да, удалить всех",
+            callback_data=AdminCallbackData(action="demo_delete_confirm").pack(),
+        ),
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data=AdminCallbackData(action="demo_users").pack(),
+        ),
     )
     builder.adjust(2)
     return builder.as_markup()
