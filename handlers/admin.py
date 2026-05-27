@@ -39,6 +39,7 @@ from keyboards.admin import (
     ADM_BAN_PREFIX,
     ADM_WRITE_PREFIX,
     ADM_PROFILE_PREFIX,
+    ADM_PROFILE_BACK_PREFIX,
     ADM_SWIPES_PREFIX,
 )
 from services.settings import get_likes_per_week_limit, set_likes_per_week_limit
@@ -1528,7 +1529,7 @@ async def admin_user_profile_view(callback: CallbackQuery, state: FSMContext) ->
             user, viewer_lang, compatibility, expanded=False
         )
         kb = get_admin_user_card_keyboard(telegram_id, expanded=False, lang=viewer_lang)
-        await bot_send_profile_card(
+        sent = await bot_send_profile_card(
             callback.bot,
             chat_id,
             photo_id=user.photo_id,
@@ -1536,7 +1537,36 @@ async def admin_user_profile_view(callback: CallbackQuery, state: FSMContext) ->
             reply_markup=kb,
             parse_mode="HTML",
         )
+        await state.update_data(
+            admin_profile_message_ids=[sent.message_id],
+            admin_user_info_message_id=callback.message.message_id,
+        )
         break
+
+
+@router.callback_query(F.data.startswith(ADM_PROFILE_BACK_PREFIX))
+async def admin_user_profile_back(callback: CallbackQuery, state: FSMContext) -> None:
+    """Закрыть анкету: удалить карточку (и «Подробнее»), оставить карточку пользователя в админке."""
+    if not callback.from_user or not callback.message:
+        return
+    if not _is_admin(callback.from_user.id):
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+    await callback.answer()
+    data = await state.get_data()
+    chat_id = callback.message.chat.id
+    ids_to_delete: list[int] = list(data.get("admin_profile_message_ids") or [])
+    if callback.message.message_id not in ids_to_delete:
+        ids_to_delete.append(callback.message.message_id)
+    for mid in ids_to_delete:
+        try:
+            await callback.bot.delete_message(chat_id=chat_id, message_id=mid)
+        except Exception:
+            pass
+    await state.update_data(
+        admin_profile_message_ids=None,
+        admin_user_info_message_id=data.get("admin_user_info_message_id"),
+    )
 
 
 @router.callback_query(F.data.regexp(r"^adm_swipe_(like|bookmark|dislike):\d+$"))

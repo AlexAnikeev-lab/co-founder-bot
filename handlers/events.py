@@ -10,8 +10,6 @@ import html
 from aiogram import Router, F
 from aiogram.types import FSInputFile
 from aiogram.types import CallbackQuery, Message
-from aiogram.types import InlineKeyboardButton
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +21,10 @@ from keyboards.events import (
     get_events_list_keyboard,
 )
 from keyboards.menu import get_main_menu_keyboard
-from keyboards.common import get_back_button
+from services.partners_prerequisites import (
+    collect_missing_prerequisites,
+    send_partners_prerequisites,
+)
 from repositories.user_repository import UserRepository
 from repositories.test_repository import TestResultRepository
 from repositories.events_repository import EventsRepository, Event
@@ -295,38 +296,15 @@ async def events_join(callback: CallbackQuery, callback_data: EventsCallbackData
             return
 
         test_result = await TestResultRepository.get_by_user_id(session, callback.from_user.id)
-        if not test_result or not test_result.main_test_completed:
-            builder = InlineKeyboardBuilder()
-            builder.add(
-                InlineKeyboardButton(
-                    text=t(lang, "partners_btn_take_test"),
-                    callback_data="start_test:main",
-                )
-            )
-            builder.add(get_back_button("main_menu", lang))
-            builder.adjust(1)
+        missing = collect_missing_prerequisites(user, test_result)
+        if missing:
             await callback.answer()
-            await callback.message.answer(
-                f"{t(lang, 'events_title')}\n\n{t(lang, 'partners_main_test_required')}",
-                reply_markup=builder.as_markup(),
-            )
-            return
-
-        missing_fields: list[str] = []
-        if not user.short_description:
-            missing_fields.append(t(lang, "partners_field_short_desc"))
-        if not user.full_description:
-            missing_fields.append(t(lang, "partners_field_full_desc"))
-        if not user.qualities:
-            missing_fields.append(t(lang, "partners_field_qualities"))
-        if missing_fields:
-            builder = InlineKeyboardBuilder()
-            builder.add(get_back_button("main_menu", lang))
-            builder.adjust(1)
-            await callback.answer()
-            await callback.message.answer(
-                f"{t(lang, 'events_title')}\n\n{t(lang, 'partners_fill_profile').format(fields=', '.join(missing_fields))}",
-                reply_markup=builder.as_markup(),
+            await send_partners_prerequisites(
+                callback.message,
+                state,
+                user,
+                test_result,
+                section_title_key="events_title",
             )
             return
 

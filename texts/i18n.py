@@ -111,6 +111,13 @@ T = {
         "partners_no_users": "Сейчас нет новых анкет для показа.\nПопробуйте позже, когда появятся новые пользователи!",
         "partners_cycle_hint": "Вы снова просматриваете анкеты по кругу (кроме лайков и избранного).",
         "partners_intro": "Используйте кнопки ниже для действий с анкетой.",
+        "partners_prerequisites_intro": (
+            "Перед тем, как начать знакомиться, тебе нужно заполнить данные.\n"
+            "Нажми на кнопку ниже — откроется нужный шаг:"
+        ),
+        "partners_prerequisites_all_done": "Отлично! Всё заполнено — можно начинать знакомиться.",
+        "partners_prerequisites_btn_continue": "🤝 Начать знакомство",
+        "partners_btn_fill_qualities": "⭐ 3 главных качества",
         "partners_main_test_required": (
             "У тебя не пройден основной тест. Он нужен для подбора партнёров и отображения совместимости.\n\n"
             "Нажми «Пройти тест», чтобы перейти к основному тесту."
@@ -469,6 +476,13 @@ Max 500 characters.
         "partners_no_users": "No new profiles to show right now.\nTry again later when new users join!",
         "partners_cycle_hint": "You're browsing profiles again in a loop (except likes and favorites).",
         "partners_intro": "Use the buttons below to act on the profile.",
+        "partners_prerequisites_intro": (
+            "Before you start meeting people, you need to complete your profile.\n"
+            "Tap a button below to go straight to that step:"
+        ),
+        "partners_prerequisites_all_done": "Great! Everything is filled in — you can start meeting people.",
+        "partners_prerequisites_btn_continue": "🤝 Start meeting people",
+        "partners_btn_fill_qualities": "⭐ 3 key strengths",
         "partners_main_test_required": (
             "You haven't completed the main test. It's needed to match partners and show compatibility.\n\n"
             "Tap «Take test» to go to the main test."

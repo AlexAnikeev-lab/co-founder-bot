@@ -134,6 +134,7 @@ USER_VIEW_PREFIX = "adm_u:"
 ADM_BAN_PREFIX = "adm_ban:"
 ADM_WRITE_PREFIX = "adm_write:"
 ADM_PROFILE_PREFIX = "adm_profile:"
+ADM_PROFILE_BACK_PREFIX = "adm_profile_back:"
 ADM_SWIPES_PREFIX = "adm_sw:"
 
 

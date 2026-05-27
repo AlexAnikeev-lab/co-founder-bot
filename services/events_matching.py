@@ -17,6 +17,7 @@ from repositories.events_repository import EventsRepository, Event
 from repositories.user_repository import UserRepository, User
 from repositories.test_repository import TestResultRepository, TestResult
 from services.compatibility_service import CompatibilityService
+from utils.qualities import all_qualities_filled
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,11 @@ async def build_pairs_for_event(
             continue
         if (u.ban_status or "none") == "full":
             continue
-        if not (u.short_description and u.full_description and u.qualities):
+        if not (
+            u.short_description
+            and u.full_description
+            and all_qualities_filled(u.qualities)
+        ):
             continue
         p = _get_user_profile(tr)
         if not p:

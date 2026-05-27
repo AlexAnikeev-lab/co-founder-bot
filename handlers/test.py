@@ -22,6 +22,11 @@ from texts.i18n import t, text_options
 from utils.errors import handle_error, notify_admin_new_user
 from texts.test_questions import TEST_TYPES
 from services.compatibility_service import CompatibilityService
+from services.partners_prerequisites import (
+    is_prerequisites_gate_message,
+    prerequisites_state_slice,
+    refresh_partners_prerequisites_message,
+)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -247,17 +252,20 @@ async def start_test(callback: CallbackQuery, state: FSMContext) -> None:
                 return
             break
         
-        # Ответ на callback один раз — убираем «часики» у пользователя
+        data = await state.get_data()
+        from_prereq = is_prerequisites_gate_message(data, callback.message.message_id)
+        prereq_slice = prerequisites_state_slice(data)
+
         await callback.answer()
-        await state.clear()
-        # Инициализируем состояние
         await state.set_state(TestStates.answering_question)
         await state.update_data(
+            **prereq_slice,
             test_type=test_type,
             current_question=1,
-            answers={}
+            answers={},
+            test_use_new_message=from_prereq,
+            test_message_id=None,
         )
-        # Показываем первый вопрос
         await show_question(callback, state, test_type, 1)
         
     except Exception as e:
@@ -312,34 +320,40 @@ async def show_question(
             num=question_num, total=total_questions, text=q_text
         ) + answer_hint
 
-        try:
-            await callback.message.edit_text(
-                text,
-                reply_markup=get_test_answer_keyboard(
-                    answers,
-                    question_num,
-                    test_type,
-                    is_scale=is_scale,
-                    lang=lang,
-                    total_questions=total_questions,
-                )
+        keyboard = get_test_answer_keyboard(
+            answers,
+            question_num,
+            test_type,
+            is_scale=is_scale,
+            lang=lang,
+            total_questions=total_questions,
+        )
+        test_msg_id = data.get("test_message_id")
+        use_new_message = data.get("test_use_new_message", False)
+
+        if test_msg_id:
+            await callback.bot.edit_message_text(
+                chat_id=callback.message.chat.id,
+                message_id=test_msg_id,
+                text=text,
+                reply_markup=keyboard,
             )
-        except Exception:
+        elif use_new_message:
+            sent = await callback.message.answer(text, reply_markup=keyboard)
+            await state.update_data(
+                test_message_id=sent.message_id,
+                test_use_new_message=False,
+            )
+        else:
             try:
-                await callback.message.delete()
+                await callback.message.edit_text(text, reply_markup=keyboard)
             except Exception:
-                pass
-            await callback.message.answer(
-                text,
-                reply_markup=get_test_answer_keyboard(
-                    answers,
-                    question_num,
-                    test_type,
-                    is_scale=is_scale,
-                    lang=lang,
-                    total_questions=total_questions,
-                )
-            )
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass
+                sent = await callback.message.answer(text, reply_markup=keyboard)
+                await state.update_data(test_message_id=sent.message_id)
     except Exception as e:
         logger.error(f"Ошибка в show_question: {e}", exc_info=True)
         await handle_error(None, e, "show_question")
@@ -503,8 +517,16 @@ async def finish_test(
                 reply_markup=get_test_results_keyboard(lang=lang)
             )
         
+        prereq_slice = prerequisites_state_slice(await state.get_data())
         await state.clear()
-        
+        if prereq_slice:
+            await state.update_data(**prereq_slice)
+            async for session in get_session():
+                await refresh_partners_prerequisites_message(
+                    callback.bot, user_id, state, session
+                )
+                break
+
     except Exception as e:
         logger.error(f"Ошибка в finish_test: {e}", exc_info=True)
         await handle_error(None, e, "finish_test")

@@ -35,8 +35,12 @@ from utils.profile_translator import (
 )
 from utils.telegram_media import send_profile_card
 from utils.user_display import format_age_label, get_display_age
+from utils.qualities import all_qualities_filled
 from keyboards.menu import get_main_menu_keyboard
-from keyboards.common import get_back_button
+from services.partners_prerequisites import (
+    collect_missing_prerequisites,
+    send_partners_prerequisites,
+)
 from texts.i18n import t, text_options
 from texts.messages import FULL_DESCRIPTION_HINT_SNIPPET
 from aiogram import Bot
@@ -660,35 +664,10 @@ async def cmd_dating(
 
     lang = getattr(user, "language", None) or "ru"
     test_result = await TestResultRepository.get_by_user_id(session, user_id)
-    if not test_result or not test_result.main_test_completed:
-        builder = InlineKeyboardBuilder()
-        builder.add(InlineKeyboardButton(
-            text=t(lang, "partners_btn_take_test"),
-            callback_data="start_test:main"
-        ))
-        builder.add(get_back_button("main_menu", lang))
-        builder.adjust(1)
-        await message.answer(
-            f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_main_test_required')}",
-            reply_markup=builder.as_markup()
-        )
-        return
-
-    missing_fields = []
-    if not user.short_description:
-        missing_fields.append(t(lang, "partners_field_short_desc"))
-    if not user.full_description:
-        missing_fields.append(t(lang, "partners_field_full_desc"))
-    if not user.qualities:
-        missing_fields.append(t(lang, "partners_field_qualities"))
-
-    if missing_fields:
-        fields_text = ", ".join(missing_fields)
-        builder = InlineKeyboardBuilder()
-        builder.add(get_back_button("main_menu", lang))
-        await message.answer(
-            f"{t(lang, 'partners_title')}\n\n{t(lang, 'partners_fill_profile').format(fields=fields_text)}",
-            reply_markup=builder.as_markup()
+    missing = collect_missing_prerequisites(user, test_result)
+    if missing:
+        await send_partners_prerequisites(
+            message, state, user, test_result, section_title_key="partners_title"
         )
         return
 
@@ -872,7 +851,7 @@ async def handle_partners_reply_action(
 @router.callback_query(F.data.startswith("collapse_profile"))
 @router.callback_query(F.data.startswith("adm_expand_profile"))
 @router.callback_query(F.data.startswith("adm_collapse_profile"))
-async def handle_expand_collapse_profile(callback: CallbackQuery) -> None:
+async def handle_expand_collapse_profile(callback: CallbackQuery, state: FSMContext) -> None:
     """
     Показать дополнительный блок по кнопке «Подробнее».
     При нажатии «Подробнее» отправляется отдельное сообщение ниже карточки
@@ -945,7 +924,12 @@ async def handle_expand_collapse_profile(callback: CallbackQuery) -> None:
                 pass
 
             if details_parts:
-                await callback.message.answer("\n\n".join(details_parts))
+                detail_msg = await callback.message.answer("\n\n".join(details_parts))
+                if raw.startswith("adm_expand_profile:"):
+                    data = await state.get_data()
+                    profile_ids = list(data.get("admin_profile_message_ids") or [])
+                    profile_ids.append(detail_msg.message_id)
+                    await state.update_data(admin_profile_message_ids=profile_ids)
             break
     except Exception as e:
         logger.error("Ошибка при развороте/сворачивании анкеты: %s", e, exc_info=True)
@@ -1042,7 +1026,12 @@ async def handle_view_liker(callback: CallbackQuery) -> None:
             liker = await UserRepository.get_by_telegram_id(session, liker_id)
             viewer = await UserRepository.get_by_telegram_id(session, viewer_id)
             lang = (getattr(viewer, "language", None) or "ru") if viewer else "ru"
-            if not liker or not liker.short_description or not liker.full_description or not liker.qualities:
+            if (
+                not liker
+                or not liker.short_description
+                or not liker.full_description
+                or not all_qualities_filled(liker.qualities)
+            ):
                 await callback.message.edit_text(
                     t(lang, "profile_unavailable"),
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[[get_back_button("main_menu", lang)]]),

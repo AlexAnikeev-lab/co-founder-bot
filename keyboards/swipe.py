@@ -156,6 +156,14 @@ def get_admin_user_card_keyboard(
                 callback_data=f"adm_expand_profile:{swiped_user_id}",
             )
         )
+    from keyboards.admin import ADM_PROFILE_BACK_PREFIX
+
+    builder.row(
+        InlineKeyboardButton(
+            text="🔙 Назад",
+            callback_data=f"{ADM_PROFILE_BACK_PREFIX}{swiped_user_id}",
+        )
+    )
     return builder.as_markup()
 
 

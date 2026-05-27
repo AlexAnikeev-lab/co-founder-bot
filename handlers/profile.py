@@ -18,6 +18,11 @@ from repositories.database import get_session
 from utils.errors import handle_error
 from utils.telegram_media import edit_message_media_safe, send_profile_card
 from utils.user_display import format_age_label, get_display_age
+from services.partners_prerequisites import (
+    FROM_PREREQ_KEY,
+    begin_field_edit_from_prerequisites,
+    finish_prerequisites_field_edit,
+)
 from utils.validators import (
     validate_name,
     validate_photo,
@@ -929,7 +934,6 @@ async def process_edit_photo(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data == "edit_short_description")
 async def start_edit_short_description(callback: CallbackQuery, state: FSMContext) -> None:
     """Начало редактирования краткого описания"""
-    await callback.answer()
     from keyboards.common import get_cancel_button
     lang = "ru"
     text = ""
@@ -943,6 +947,15 @@ async def start_edit_short_description(callback: CallbackQuery, state: FSMContex
         else:
             text = t(lang, "short_description_request")
         break
+    if await begin_field_edit_from_prerequisites(
+        callback,
+        state,
+        text=text,
+        lang=lang,
+        edit_state=ProfileEditStates.editing_short_description,
+    ):
+        return
+    await callback.answer()
     target_message_id = callback.message.message_id
     try:
         await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
@@ -988,6 +1001,14 @@ async def process_edit_short_description(message: Message, state: FSMContext) ->
         user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
         if user:
             await UserRepository.update(session, user, short_description=message.text)
+            if data.get(FROM_PREREQ_KEY):
+                await finish_prerequisites_field_edit(
+                    message.bot,
+                    message.from_user.id,
+                    state,
+                    chat_id=message.chat.id,
+                )
+                return
             await state.clear()
             await send_profile_view(message, message.from_user.id, state, edit_message_id=last_msg_id)
         break
@@ -996,7 +1017,6 @@ async def process_edit_short_description(message: Message, state: FSMContext) ->
 @router.callback_query(F.data == "edit_full_description")
 async def start_edit_full_description(callback: CallbackQuery, state: FSMContext) -> None:
     """Начало редактирования полного описания"""
-    await callback.answer()
     from keyboards.common import get_cancel_button
     lang = "ru"
     text = ""
@@ -1010,6 +1030,15 @@ async def start_edit_full_description(callback: CallbackQuery, state: FSMContext
         else:
             text = t(lang, "full_description_request")
         break
+    if await begin_field_edit_from_prerequisites(
+        callback,
+        state,
+        text=text,
+        lang=lang,
+        edit_state=ProfileEditStates.editing_full_description,
+    ):
+        return
+    await callback.answer()
     target_message_id = callback.message.message_id
     try:
         await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
@@ -1055,26 +1084,23 @@ async def process_edit_full_description(message: Message, state: FSMContext) -> 
         user = await UserRepository.get_by_telegram_id(session, message.from_user.id)
         if user:
             await UserRepository.update(session, user, full_description=message.text)
+            if data.get(FROM_PREREQ_KEY):
+                await finish_prerequisites_field_edit(
+                    message.bot,
+                    message.from_user.id,
+                    state,
+                    chat_id=message.chat.id,
+                )
+                return
             await state.clear()
             await send_profile_view(message, message.from_user.id, state, edit_message_id=last_msg_id)
         break
 
 
 def _parse_qualities_to_slots(user_qualities: str | None) -> list[tuple[str, str]]:
-    """Разобрать строку качеств в до 3 слотов (emoji, text). Формат 'emoji|text\\n' или старый 'q1, q2, q3'."""
-    if not user_qualities or not user_qualities.strip():
-        return [("•", ""), ("•", ""), ("•", "")]
-    lines = [ln.strip() for ln in user_qualities.strip().split("\n") if ln.strip()]
-    slots = []
-    for line in lines[:3]:
-        if "|" in line:
-            emoji, text = line.split("|", 1)
-            slots.append((emoji.strip() or "•", text.strip()))
-        else:
-            slots.append(("•", line))
-    while len(slots) < 3:
-        slots.append(("•", ""))
-    return slots[:3]
+    from utils.qualities import parse_qualities_to_slots
+
+    return parse_qualities_to_slots(user_qualities)
 
 
 def _build_qualities_from_slots(slots: list[tuple[str, str]]) -> str:
@@ -1097,29 +1123,40 @@ async def _start_edit_quality(
     edit_state: type,
 ) -> None:
     """Запрос одного качества (1–3)."""
-    await callback.answer()
     from keyboards.common import get_cancel_button
     text = request_text
     lang = "ru"
-    target_message_id = callback.message.message_id
-    try:
-        async for session in get_session():
-            user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
-            if user:
-                lang = getattr(user, "language", None) or "ru"
-                if user.qualities:
-                    slots = _parse_qualities_to_slots(user.qualities)
-                    if quality_index < len(slots):
-                        emoji, text_part = slots[quality_index]
-                        text_only = (text_part or "").strip()
-                        if text_only:
-                            current_line = f"{emoji} <code>{html.escape(text_only)}</code>"
-                        else:
-                            current_line = "—"
+    async for session in get_session():
+        user = await UserRepository.get_by_telegram_id(session, callback.from_user.id)
+        if user:
+            lang = getattr(user, "language", None) or "ru"
+            if user.qualities:
+                slots = _parse_qualities_to_slots(user.qualities)
+                if quality_index < len(slots):
+                    emoji, text_part = slots[quality_index]
+                    text_only = (text_part or "").strip()
+                    if text_only:
+                        current_line = f"{emoji} <code>{html.escape(text_only)}</code>"
                     else:
                         current_line = "—"
-                    text = f"{request_text}\n\n{t(lang, 'edit_current_copyable')}\n{current_line}"
-            break
+                else:
+                    current_line = "—"
+                text = f"{request_text}\n\n{t(lang, 'edit_current_copyable')}\n{current_line}"
+        break
+
+    if await begin_field_edit_from_prerequisites(
+        callback,
+        state,
+        text=text,
+        lang=lang,
+        edit_state=edit_state,
+    ):
+        await state.update_data(editing_quality_index=quality_index)
+        return
+
+    await callback.answer()
+    target_message_id = callback.message.message_id
+    try:
         await callback.message.edit_text(text, reply_markup=get_cancel_button(lang))
     except Exception:
         sent = await callback.message.answer(text, reply_markup=get_cancel_button(lang))
@@ -1298,8 +1335,16 @@ async def profile_edit_quality_emoji_selected(callback: CallbackQuery, state: FS
                     await UserRepository.update(session, user, qualities=qualities_str)
             break
 
+        if data.get(FROM_PREREQ_KEY):
+            await finish_prerequisites_field_edit(
+                callback.bot,
+                callback.from_user.id,
+                state,
+                chat_id=callback.message.chat.id,
+            )
+            return
+
         await state.clear()
-        # Показываем обновлённый профиль новым сообщением
         await send_profile_view(callback.message, callback.from_user.id, state)
     except Exception as e:
         logger.error("Ошибка в profile_edit_quality_emoji_selected: %s", e, exc_info=True)
