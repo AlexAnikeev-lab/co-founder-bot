@@ -1,157 +1,59 @@
 # Co-founder Bot
 
-Telegram bot for finding co-founders, project partners, and startup teammates. Users complete a compatibility test, browse profiles, match with others, join events, and optionally subscribe for premium features.
+A Telegram bot for finding someone to build with — a co-founder, startup partner, or just someone on the same wavelength.
 
-**Live demo:** [https://t.me/YOUR_BOT_USERNAME](https://t.me/YOUR_BOT_USERNAME) — replace with your hosted bot before submitting to Horizons.
+**Try it:** [@findyourcofounder_bot](https://t.me/findyourcofounder_bot)
 
 ## Why I built this
 
-Many students and young founders have ideas but struggle to find the right teammate. Co-founder Bot combines profile onboarding, personality/compatibility tests, swipe-based discovery, event matchmaking, and bilingual UI (RU/EN) in one Telegram experience — no separate app install required.
+Me and people I know kept having ideas but no one to team up with — someone who matches your skills, pace, and personality. I wanted it all in one place without installing another app: open Telegram, fill out a short profile, take a test, browse people nearby.
 
-## Features
+That's how this bot grew — profiles, swipes, events, and two languages (RU / EN).
 
-- Registration with age check (learning mode under 14, full mode 14+)
-- Profile with photo, city, strengths, and descriptions
-- Compatibility tests and partner matching (likes, super-likes, bookmarks, matches)
-- Events: admin-created cards, registration, automatic pair matching
-- Co-founder Premium subscription (Telegram Stars payment flow)
-- Admin panel: stats, swipe cleanup, demo users, event management
-- Bilingual interface (Russian / English) with profile translation in discovery
+## What it does
 
-## How to try the bot (demo)
+- sign-up with an age check (under 14 gets a learning mode, 14+ gets the full experience)
+- profile: photo, city, strengths, descriptions
+- compatibility tests and partner search (likes, super-likes, bookmarks, matches)
+- events: sign up, pair matching, notifications
+- Co-founder Premium (paid via Telegram Stars)
+- admin panel for stats, events, and test users
 
-1. Open the live bot: [https://t.me/YOUR_BOT_USERNAME](https://t.me/YOUR_BOT_USERNAME)
-2. Send `/start`
-3. Complete registration (age, legal agreement, phone, profile fields)
-4. Use the main menu: Events, Dating/Partners, Profile, Premium (14+)
+Profiles in the dating section translate to match your UI language — if you're on EN, the other person's bio shows in EN too.
 
-The bot must stay **online and hosted** for reviewers. Do not use the GitHub repo URL as the demo link.
+## How to use it
 
-## Commands
+Open the bot → `/start` → finish registration → use the menu: Dating, Events, Profile.
 
-| Command | Who | Description |
-|---------|-----|-------------|
-| `/start` | Everyone | Start or restart the bot, begin registration |
-| `/admin` | Admins only | Open admin panel (stats, events, demo users) |
-| `/add_test_user` | Admins only | Add demo users for testing (default 10, max 50) |
-| `/add_test_user 20` | Admins only | Add a specific number of demo users |
-| `/delete_test_users confirm` | Admins only | Remove all demo users |
-| `/cancel` | Admins in FSM | Cancel current admin input flow |
+Main commands:
 
-Most navigation uses **inline buttons** (main menu, profile, swipes, events). Every screen has **Back** or **Main menu**.
+| Command | Who | What |
+|---------|-----|------|
+| `/start` | everyone | start or restart |
+| `/admin` | admins | admin panel |
+| `/add_test_user` | admins | add demo users for testing |
+| `/delete_test_users confirm` | admins | remove all demo users |
 
-## Screenshots
+Everything else is mostly buttons in the chat.
 
-Add 1–2 screenshots to your Horizons project page (registration flow, swipe screen, or events list). UI assets live in `photos/` and `photos_engls/`.
+## Stack
 
-## Tech stack
+Python, aiogram 3, SQLAlchemy + SQLite, deep-translator for profile translation.
 
-- Python 3.10+
-- [aiogram](https://docs.aiogram.dev/) 3.20+ (async Telegram Bot API)
-- SQLAlchemy 2.0 + aiosqlite
-- python-dotenv
-- deep-translator (RU↔EN profile translation)
+## AI use disclosure
 
-## Project structure
+I used AI assistants (Cursor / ChatGPT) for parts of the code and docs — mostly to draft handlers faster, debug issues, and sketch early write-ups. I still reviewed, tested, and edited everything myself.
 
-```
-├── main.py              # Entry point
-├── config.py            # Settings from environment
-├── handlers/            # Event handlers (thin layer)
-├── keyboards/           # Inline/reply keyboards
-├── middlewares/         # Auth, throttling, DB session
-├── services/            # Business logic
-├── repositories/        # Database access
-├── states/              # FSM states
-├── texts/               # User-facing copy (i18n)
-├── utils/               # Logging, validation, helpers
-├── .env.example         # Environment template
-└── requirements.txt
-```
+The bot itself does **not** use generative AI at runtime. Profile translation runs through `deep-translator` (Google Translate). OpenRouter is in the config as a placeholder but isn't wired up in the current release.
 
-## Local setup
+User-facing copy in `texts/` is mine; AI only helped with wording sometimes.
 
-### 1. Clone and enter the repo
+## Links
 
-```bash
-git clone https://github.com/AlexAnikeev-lab/co-founder-bot.git
-cd co-founder-bot
-```
-
-### 2. Virtual environment
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install --upgrade pip setuptools wheel
-pip install -r requirements.txt
-```
-
-If `pydantic-core` fails to build, install Rust (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`) and retry. See [INSTALL.md](INSTALL.md) and [FIX_RUST.md](FIX_RUST.md).
-
-### 3. Environment variables
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-
-```env
-BOT_TOKEN=your_bot_token_from_botfather
-ADMIN_ID=your_telegram_user_id
-DATABASE_URL=sqlite+aiosqlite:///cofounder.db
-MIN_AGE_FULL=14
-LOG_LEVEL=INFO
-```
-
-Optional: subscription and OpenRouter keys — see [.env.example](.env.example).
-
-### 4. Run
-
-```bash
-python main.py
-```
-
-Database tables are created automatically on first start.
-
-### Docker (optional)
-
-```bash
-docker build -t co-founder-bot .
-docker run -d --name co-founder \
-  -e BOT_TOKEN=your_bot_token \
-  -e ADMIN_ID=123456789 \
-  -v co-founder-data:/app/data \
-  co-founder-bot
-```
-
-## Hosting (required for approval)
-
-Deploy the bot on a VPS, cloud VM, or any always-on host (Docker recommended). The reviewer must open your **Telegram bot link** and use `/start` without setting up the project themselves.
-
-## Horizons submission checklist
-
-Before submitting on [Horizons](https://horizons.hackclub.com):
-
-- [ ] Public GitHub repo with this README and [MIT License](LICENSE)
-- [ ] **Demo URL** = live Telegram bot link (`https://t.me/...`), not the repo
-- [ ] **Code URL** = public GitHub repo
-- [ ] Bot is hosted and online
-- [ ] Project description + screenshot on Horizons
-- [ ] Hackatime linked to the project
-- [ ] No secrets in the repo (`.env` is gitignored)
-
-## Test scenarios
-
-**Happy path:** `/start` → registration → tests → browse partners → register for an event.
-
-**Error paths:** invalid age input, declined phone access, invalid photo — bot shows a friendly message and does not crash.
-
-## Version
-
-Current version: **1.0.1** (see `config.py`).
+- Bot: [@findyourcofounder_bot](https://t.me/findyourcofounder_bot)
+- Telegram channel: [@cofounderapp](https://t.me/cofounderapp)
+- Website: coming soon
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 Alex Nik
+[MIT](LICENSE)
