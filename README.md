@@ -36,6 +36,43 @@ Main commands:
 
 Everything else is mostly buttons in the chat.
 
+## How it works
+
+Under the hood it's a pretty standard Telegram bot stack: **aiogram** handlers receive messages and button taps, **FSM states** walk you through registration step by step, and everything lands in **SQLite** via SQLAlchemy (profiles, swipes, matches, events).
+
+Rough flow:
+
+1. **Onboarding** — age check, legal agreement, phone contact, photo, city, strengths, short & full bio.
+2. **Tests** — a main compatibility quiz (values, goals, risk, communication, decision-making). Answers become a profile used for matching.
+3. **Discovery** — swipe-style partner cards with a compatibility score. Like, super-like, bookmark, or pass.
+4. **Match** — when both sides like each other, the bot opens contact and shows *why* you matched (breakdown by category + team roles like Hacker / Hustler).
+5. **Events** — admins post events; users sign up; the scheduler can auto-pair people before the event day.
+6. **Translation** — if your UI is EN but someone's profile is RU (or the other way around), `deep-translator` translates their bio on the fly.
+
+No generative AI in production — just rules, stored test scores, and Google Translate for cross-language profiles.
+
+## Screenshots
+
+**Registration & onboarding** — welcome screens, phone step, compatibility test, profile fields (RU interface):
+
+![Onboarding flow](docs/screenshots/01-onboarding.png)
+
+**Profile bio** — users write who they are and what they're looking for; works in both EN and RU:
+
+![Profile bio EN and RU](docs/screenshots/02-profile-bio.png)
+
+**Partner card** — browsing someone else's profile with compatibility %, strengths, and swipe actions:
+
+![Partner profile card](docs/screenshots/03-partner-card.png)
+
+**Compatibility breakdown** — after a match, the bot explains scores by category and suggested team roles:
+
+![Compatibility breakdown](docs/screenshots/04-compatibility.png)
+
+**Profile menu** — edit profile, tests, people search, premium subscription:
+
+![Profile menu](docs/screenshots/05-profile-menu.png)
+
 ## Stack
 
 Python, aiogram 3, SQLAlchemy + SQLite, deep-translator for profile translation.
