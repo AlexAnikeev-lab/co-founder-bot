@@ -1,214 +1,124 @@
 # Co-founder Bot
 
-Telegram бот для знакомств и поиска партнёров для проектов и стартапов.
+Telegram bot for finding co-founders, project partners, and startup teammates. Users complete a compatibility test, browse profiles, match with others, join events, and optionally subscribe for premium features.
 
-## Описание
+**Live demo:** [https://t.me/YOUR_BOT_USERNAME](https://t.me/YOUR_BOT_USERNAME) — replace with your hosted bot before submitting to Horizons.
 
-Co-founder Bot помогает пользователям находить единомышленников для совместной работы над проектами, стартапами и идеями. Бот использует систему тестов для оценки совместимости и предоставляет обучающие материалы.
+## Why I built this
 
-## Особенности
+Many students and young founders have ideas but struggle to find the right teammate. Co-founder Bot combines profile onboarding, personality/compatibility tests, swipe-based discovery, event matchmaking, and bilingual UI (RU/EN) in one Telegram experience — no separate app install required.
 
-- 🔐 Регистрация с проверкой возраста
-- 📚 Обучающий режим для пользователей младше 14 лет
-- 📝 Система тестов для оценки совместимости
-- 💕 Поиск партнёров и мэтчинг
-- 🌐 Автоперевод анкеты в знакомствах по языку интерфейса (двусторонне RU↔EN: краткое/полное описание и сильные стороны)
-- 📅 Мероприятия: у пользователя в списке — только текст кнопки; в карточке — только описание и «Участвовать» / «Назад»; админ задаёт одну дату `ДД.ММ.ГГГГ` — после конца этого дня карточка удаляется; цена и время только в тексте описания; рассылка участникам, пары, уведомления о парах; автоматический мэтчинг примерно за сутки до конца выбранного дня (если включён подбор пар)
-- ⭐ **Подписка (Co-founder Subscription):** супер-лайк 🔥 (мгновенный контакт), 10 лайков в неделю, 20 избранных. Оплата по коду в группу (100 звёзд/мес).
-- Бесплатно: 5 лайков в неделю и 10 избранных.
-- 👤 Управление профилем
-- 🔐 Админ-панель: статистика и очистка лайков/дизлайков (команда `/admin`, только для пользователей из `ADMIN_ID`)
+## Features
 
-## Команда для администратора
+- Registration with age check (learning mode under 14, full mode 14+)
+- Profile with photo, city, strengths, and descriptions
+- Compatibility tests and partner matching (likes, super-likes, bookmarks, matches)
+- Events: admin-created cards, registration, automatic pair matching
+- Co-founder Premium subscription (Telegram Stars payment flow)
+- Admin panel: stats, swipe cleanup, demo users, event management
+- Bilingual interface (Russian / English) with profile translation in discovery
 
-Команда **`/admin`** доступна только пользователям с ID, указанными в `ADMIN_ID` в `.env`. Можно указать несколько ID через запятую, например: `ADMIN_ID=123,456,789`. В админ-панели доступны:
-- **Детальная статистика:** количество пользователей (всего и с завершённой регистрацией), количество лайков, дизлайков, пропусков и закладок.
-- **Обновить статистику** — обновить данные на экране.
-- **Очистить лайки и дизлайки** — удаление всех записей с действиями «лайк» и «дизлайк» (с подтверждением). Пропуски и закладки не удаляются.
-- **Уведомление «🆕 Новый пользователь»** — приходит после прохождения основного теста (не сразу после регистрации). Кнопка **«Анкета»** открывает карточку с совместимостью этого пользователя и админа, который нажал; под карточкой — 🤝 / 🌟 / 👎 и «Развернуть», как в разделе «Партнёры».
-- **Демо-пользователи для тестов:** `/admin` → **🧪 Демо-пользователи** или команды:
-  - `/add_test_user` — добавить 10 (по умолчанию), `/add_test_user 20` — до 50 за раз;
-  - `/delete_test_users confirm` — удалить всех демо (ID 9000000001–9000010000).
-  - 24 шаблона анкет (12 RU + 12 EN): регистрация, все тесты, описания с «компаниями» в кавычках. Уведомления «Новый пользователь» для демо **не** отправляются.
+## How to try the bot (demo)
 
-## Структура проекта
+1. Open the live bot: [https://t.me/YOUR_BOT_USERNAME](https://t.me/YOUR_BOT_USERNAME)
+2. Send `/start`
+3. Complete registration (age, legal agreement, phone, profile fields)
+4. Use the main menu: Events, Dating/Partners, Profile, Premium (14+)
+
+The bot must stay **online and hosted** for reviewers. Do not use the GitHub repo URL as the demo link.
+
+## Commands
+
+| Command | Who | Description |
+|---------|-----|-------------|
+| `/start` | Everyone | Start or restart the bot, begin registration |
+| `/admin` | Admins only | Open admin panel (stats, events, demo users) |
+| `/add_test_user` | Admins only | Add demo users for testing (default 10, max 50) |
+| `/add_test_user 20` | Admins only | Add a specific number of demo users |
+| `/delete_test_users confirm` | Admins only | Remove all demo users |
+| `/cancel` | Admins in FSM | Cancel current admin input flow |
+
+Most navigation uses **inline buttons** (main menu, profile, swipes, events). Every screen has **Back** or **Main menu**.
+
+## Screenshots
+
+Add 1–2 screenshots to your Horizons project page (registration flow, swipe screen, or events list). UI assets live in `photos/` and `photos_engls/`.
+
+## Tech stack
+
+- Python 3.10+
+- [aiogram](https://docs.aiogram.dev/) 3.20+ (async Telegram Bot API)
+- SQLAlchemy 2.0 + aiosqlite
+- python-dotenv
+- deep-translator (RU↔EN profile translation)
+
+## Project structure
 
 ```
-Co-founder-new/
-├── main.py                 # Точка входа в приложение
-├── config.py               # Конфигурация бота
-├── requirements.txt        # Зависимости проекта
-├── .env.example           # Пример файла с переменными окружения
-├── .gitignore             # Игнорируемые файлы
-├── README.md              # Документация
-│
-├── handlers/              # Обработчики событий
-│   ├── __init__.py       # Регистрация всех handlers
-│   ├── start.py          # Обработка команды /start
-│   ├── registration.py   # Процесс регистрации
-│   ├── profile.py        # Управление профилем
-│   ├── test.py           # Прохождение тестов
-│   ├── learning.py       # Обучающий режим
-│   ├── common.py         # Общие обработчики (меню, навигация)
-│   ├── swipe.py          # Свайпы (поиск партнёров)
-│   ├── subscription.py   # Подписка (оплата по коду в группу)
-│   └── admin.py          # Админ-панель (статистика, очистка)
-│
-├── keyboards/            # Клавиатуры бота
-│   ├── __init__.py
-│   ├── common.py         # Общие клавиатуры
-│   ├── menu.py           # Меню и навигация
-│   ├── profile.py        # Клавиатуры профиля
-│   ├── subscription.py   # Клавиатуры подписки
-│   ├── swipe.py          # Клавиатуры свайпов
-│   └── test.py           # Клавиатуры для тестов
-│
-├── middlewares/          # Middleware
-│   ├── __init__.py
-│   ├── throttling.py     # Защита от флуда
-│   └── auth.py           # Проверка авторизации
-│
-├── services/             # Бизнес-логика
-│   └── __init__.py
-│
-├── repositories/         # Работа с базой данных
-│   ├── __init__.py
-│   ├── database.py       # Настройка БД
-│   ├── user_repository.py      # Репозиторий пользователей
-│   ├── swipe_repository.py     # Свайпы (лайки, избранное)
-│   └── subscription_repository.py # Коды оплаты подписки
-│
-├── states/               # FSM состояния
-│   ├── __init__.py
-│   ├── registration.py  # Состояния регистрации
-│   └── test.py          # Состояния тестов
-│
-├── utils/                # Вспомогательные функции
-│   ├── __init__.py
-│   ├── logger.py         # Настройка логирования
-│   ├── errors.py         # Обработка ошибок
-│   └── validators.py     # Валидация данных
-│
-└── texts/                # Текстовые сообщения
-    ├── __init__.py
-    └── messages.py       # Все тексты бота
+├── main.py              # Entry point
+├── config.py            # Settings from environment
+├── handlers/            # Event handlers (thin layer)
+├── keyboards/           # Inline/reply keyboards
+├── middlewares/         # Auth, throttling, DB session
+├── services/            # Business logic
+├── repositories/        # Database access
+├── states/              # FSM states
+├── texts/               # User-facing copy (i18n)
+├── utils/               # Logging, validation, helpers
+├── .env.example         # Environment template
+└── requirements.txt
 ```
 
-## Установка и запуск
+## Local setup
 
-### 1. Клонирование репозитория
+### 1. Clone and enter the repo
 
 ```bash
-git clone <repository_url>
-cd Co-founder-new
+git clone https://github.com/AlexAnikeev-lab/co-founder-bot.git
+cd co-founder-bot
 ```
 
-### 2. Создание виртуального окружения
-
-**Рекомендуется использовать Python 3.12** (для Python 3.14 может потребоваться Rust):
+### 2. Virtual environment
 
 ```bash
-# Создание виртуального окружения с Python 3.12
 python3.12 -m venv .venv
-
-# Активация окружения
-source .venv/bin/activate  # Для Windows: .venv\Scripts\activate
-```
-
-### 3. Установка зависимостей
-
-**Вариант 1: Использование скрипта (рекомендуется)**
-```bash
-./install.sh
-```
-
-**Вариант 2: Ручная установка**
-```bash
-source .venv/bin/activate
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
-### 4. Настройка переменных окружения
+If `pydantic-core` fails to build, install Rust (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`) and retry. See [INSTALL.md](INSTALL.md) and [FIX_RUST.md](FIX_RUST.md).
 
-Создайте файл `.env` на основе `.env.example`:
+### 3. Environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Заполните необходимые переменные.
-
-**Тестовый бот:** скопируйте настройки в `.env.test` (токен тестового бота, отдельная `DATABASE_URL` и т.д.). В `.env` укажите `TEST_MODE=true` — при запуске `python main.py` подтянется `.env.test` поверх `.env`. Альтернатива без правки `.env`: `./run_test.sh` (через `ENV_FILE=.env.test`).
+Edit `.env`:
 
 ```env
-BOT_TOKEN=your_bot_token_here
-ADMIN_ID=your_admin_id_here
-# Несколько админов — через запятую: ADMIN_ID=123,456,789
-TEST_MODE=false
+BOT_TOKEN=your_bot_token_from_botfather
+ADMIN_ID=your_telegram_user_id
 DATABASE_URL=sqlite+aiosqlite:///cofounder.db
 MIN_AGE_FULL=14
 LOG_LEVEL=INFO
-
-# Подписка (оплата по коду в группу)
-SUBSCRIPTION_STARS_PRICE=100
-PAYMENT_GROUP_ID=          # ID группы, куда пользователь отправляет код (число)
-PAYMENT_GROUP_LINK=         # Ссылка на группу (t.me/... или invite)
-PAYMENT_CODE_BASE=S4K3FF   # Префикс кода (код = PAYMENT_CODE_BASE_<telegram_id>)
-BUY_STARS_BOT_URL=https://t.me/...  # Ссылка на бота для покупки звёзд (гиперссылка «ссылка»)
 ```
 
-### 5. Установка зависимостей
+Optional: subscription and OpenRouter keys — see [.env.example](.env.example).
 
-**⚠️ ВАЖНО:** Если при установке возникает ошибка компиляции `pydantic-core`, требуется установить Rust.
-
-**Быстрое решение:**
-```bash
-# Установите Rust (не требует sudo)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-
-# Затем установите зависимости
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Подробные инструкции см. в файле [FIX_RUST.md](FIX_RUST.md) или [INSTALL.md](INSTALL.md).
-
-### 6. База данных
-
-**Таблицы создаются автоматически** при первом запуске бота (`python main.py`). Отдельно запускать `init_db.py` не обязательно.
-
-При необходимости можно инициализировать БД вручную:
+### 4. Run
 
 ```bash
-python init_db.py
-```
-
-Если база уже создана и нужно добавить новые поля:
-
-```bash
-python migrate_db.py
-```
-
-### 7. Запуск бота
-
-```bash
-source .venv/bin/activate
 python main.py
 ```
 
-### Запуск в Docker
+Database tables are created automatically on first start.
 
-Сборка образа:
+### Docker (optional)
 
 ```bash
 docker build -t co-founder-bot .
-```
-
-Запуск с передачей переменных окружения и сохранением БД в volume:
-
-```bash
 docker run -d --name co-founder \
   -e BOT_TOKEN=your_bot_token \
   -e ADMIN_ID=123456789 \
@@ -216,143 +126,32 @@ docker run -d --name co-founder \
   co-founder-bot
 ```
 
-Опционально: `OPENROUTER_API_KEY`, `DATABASE_URL` (по умолчанию `sqlite+aiosqlite:////app/data/cofounder.db`), `LOG_LEVEL`. Файл `.env` в образ не копируется — все настройки задавайте через `-e` или `--env-file`.
+## Hosting (required for approval)
 
-Таблицы БД создаются автоматически при первом запуске контейнера.
+Deploy the bot on a VPS, cloud VM, or any always-on host (Docker recommended). The reviewer must open your **Telegram bot link** and use `/start` without setting up the project themselves.
 
-## Логика работы бота
+## Horizons submission checklist
 
-### Регистрация
+Before submitting on [Horizons](https://horizons.hackclub.com):
 
-1. **Команда /start** - приветствие и начало работы
-2. **Проверка возраста** - определение режима работы (обучающий/полный)
-3. **Юридическое соглашение** - для пользователей старше 14 лет
-4. **Доступ к данным** - запрос Telegram ID и номера телефона
-5. **Заполнение профиля** - имя, фото, город, сильные стороны и описания
+- [ ] Public GitHub repo with this README and [MIT License](LICENSE)
+- [ ] **Demo URL** = live Telegram bot link (`https://t.me/...`), not the repo
+- [ ] **Code URL** = public GitHub repo
+- [ ] Bot is hosted and online
+- [ ] Project description + screenshot on Horizons
+- [ ] Hackatime linked to the project
+- [ ] No secrets in the repo (`.env` is gitignored)
 
-### Два режима работы
+## Test scenarios
 
-#### Обучающий режим (< 14 лет)
-- Доступ к обучающим материалам
-- Прохождение тестов для саморазвития
-- Ограниченный функционал
+**Happy path:** `/start` → registration → tests → browse partners → register for an event.
 
-#### Полный режим (≥ 14 лет)
-- Все функции обучающего режима
-- Поиск партнёров
-- Система мэтчинга
-- Премиум функционал
+**Error paths:** invalid age input, declined phone access, invalid photo — bot shows a friendly message and does not crash.
 
-### Навигация
+## Version
 
-Каждый экран имеет кнопку "Назад" или "Главное меню" для возврата.
+Current version: **1.0.1** (see `config.py`).
 
-### Мероприятия
+## License
 
-**Пользователь:** в разделе «Мероприятия» список инлайн-кнопок с подписями, заданными админом. По нажатию отправляется одно сообщение-описание (как его задал админ: эмодзи, цитаты, кастомные эмодзи, фото с подписью и т.д.) и клавиатура «Участвовать» / «Назад». Цена, время и дата в карточке не выводятся отдельно — всё в описании.
-
-**Ограничение Telegram (важно):** текст инлайн-кнопки в Bot API — это обычная строка: **кастомные премиум-эмодзи в названии кнопки списка не поддерживаются** (клиент покажет запасной «обычный» эмодзи). В **описании карточки** кастомные эмодзи сохраняются и отправляются с сущностями `MessageEntity`; чтобы бот имел право слать такие сообщения пользователям, у **владельца бота** (аккаунт, к которому привязан токен в BotFather) должна быть активна **Telegram Premium** (актуальные условия см. в [Bot API](https://core.telegram.org/bots/api)).
-
-**Админ** (`/admin` → мероприятия): при создании — текст кнопки, одно сообщение-описание (включая цену/время по желанию), вкл/выкл подбор пар и **только календарная дата** `ДД.ММ.ГГГГ`: после конца этого дня карточка удаляется автоматически; автоматический мэтчинг — примерно за сутки до конца указанного дня. В карточке мероприятия: зарегистрировавшиеся, список пар, рассылка участникам, ручные уведомления о парах. При новой регистрации участника всем `ADMIN_ID` приходит уведомление: имя — гиперссылка в ЛС, название мероприятия.
-
-**Главное меню:**
-- 📅 Мероприятия
-- 💕 Знакомства (только для ≥14 лет)
-- ℹ️ Информация
-- 👤 Профиль
-- ⭐ Co-founder Premium (только для ≥14 лет)
-
-**Профиль:**
-- ✏️ Изменить
-- 📝 Тесты
-- 👥 Люди (только для ≥14 лет)
-- ⭐ Избранные (только для ≥14 лет)
-- 💕 Мэтчи (только для ≥14 лет)
-- ℹ️ Инструкция по боту
-- 🗑 Удалить профиль
-
-## Технологии
-
-- **Python 3.10+**
-- **aiogram 3.20+** - асинхронный фреймворк для Telegram ботов
-- **SQLAlchemy 2.0** - ORM для работы с базой данных
-- **aiosqlite** - асинхронный драйвер для SQLite
-- **python-dotenv** - загрузка переменных окружения
-- **deep-translator** - перевод анкет в разделе знакомств под язык интерфейса (RU/EN)
-
-## Архитектура
-
-### Handlers
-Содержат только обработку событий от пользователя. Вся бизнес-логика вынесена в services.
-
-### Keyboards
-Все клавиатуры создаются через классы CallbackData для типобезопасности.
-
-### States
-FSM используется строго и осознанно. Состояния очищаются при переходе в главное меню.
-
-### Repositories
-Отвечают за работу с базой данных. Используют SQLAlchemy для асинхронной работы.
-
-### Services
-Содержат бизнес-логику, которая не относится напрямую к обработке событий.
-
-### Utils
-Вспомогательные функции: валидация, логирование, обработка ошибок.
-
-### Texts
-Все текстовые сообщения хранятся централизованно в `texts/messages.py`.
-
-## Безопасность
-
-- Все токены и секреты хранятся в `.env`
-- Валидация всех данных от пользователя
-- Защита от флуда через ThrottlingMiddleware
-- Обработка всех ошибок с логированием
-- Уведомления администратора о критических ошибках
-
-## Расширение функционала
-
-### Добавление нового теста
-
-1. Добавить данные теста в базу данных
-2. Обновить `handlers/test.py` для обработки нового теста
-3. Добавить клавиатуры в `keyboards/test.py` при необходимости
-
-### Добавление нового раздела
-
-1. Создать handler в `handlers/`
-2. Добавить клавиатуры в `keyboards/`
-3. Зарегистрировать handler в `handlers/__init__.py`
-4. Добавить пункт меню в `keyboards/menu.py`
-
-## Тестовые сценарии
-
-### Happy Path
-
-1. Пользователь запускает `/start`
-2. Проходит регистрацию успешно (включая шаг «Город» перед сильными сторонами)
-3. Заполняет профиль
-4. Проходит тесты
-5. Использует функции поиска партнёров
-6. **Мероприятия:** открывает список, нажимает кнопку мероприятия — видит описание и регистрируется через «Участвовать»; «Назад» возвращает к списку
-7. **Админ мероприятия:** создаёт событие (кнопка → описание сообщением → подбор пар → дата `ДД.ММ.ГГГГ`), открывает карточку — смотрит пары, при необходимости рассылает участникам сообщение и отправляет уведомления о парах
-
-### Сценарии ошибок
-
-1. Некорректный возраст - показывается сообщение об ошибке
-2. Отказ от предоставления данных - регистрация не завершается
-3. Некорректное фото - запрос повторяется
-4. Двойное нажатие кнопки - игнорируется через throttling
-
-## Версия
-
-Текущая версия: 1.0.0
-
-## Лицензия
-
-[Указать лицензию]
-
-## Контакты
-
-[Указать контакты]
+[MIT](LICENSE) — Copyright (c) 2026 Alex Nik
